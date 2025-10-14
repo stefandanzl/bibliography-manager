@@ -14,42 +14,33 @@ let CiteConstructor: any = null;
 async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
 
-	try {
-		// Try to use global citation-js if available (for Obsidian environment)
-		if ((window as any).Cite) {
-			CiteConstructor = (window as any).Cite;
-			return CiteConstructor;
-		}
+	// Use dynamic import for proper module loading
+	const citationCore = await import('@citation-js/core');
 
-		// Use dynamic import for proper module loading
-		const citationCore = await import('@citation-js/core');
+	// Get the Cite class
+	CiteConstructor = (citationCore as any).default?.Cite ||
+					  (citationCore as any).Cite ||
+					  (citationCore as any).default;
 
-		// Try different import patterns for the Cite class
-		CiteConstructor = (citationCore as any).default?.Cite ||
-						  (citationCore as any).Cite ||
-						  (citationCore as any).default;
-
-		if (!CiteConstructor) {
-			throw new Error('Could not find Cite constructor in citation-js/core');
-		}
-
-		// Try to load bibtex plugin if available
-		try {
-			const bibtexPlugin = await import('@citation-js/plugin-bibtex');
-			const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
-
-			if (pluginConfig && typeof CiteConstructor.add === 'function') {
-				CiteConstructor.add(pluginConfig);
-			}
-		} catch (pluginError) {
-			console.warn('Could not load bibtex plugin, using basic functionality:', pluginError);
-		}
-
-		return CiteConstructor;
-	} catch (error) {
-		console.warn('Failed to initialize citation-js:', error);
-		return null;
+	if (!CiteConstructor) {
+		throw new Error('Could not find Cite constructor in citation-js/core');
 	}
+
+	// Load bibtex plugin - this is required
+	const bibtexPlugin = await import('@citation-js/plugin-bibtex');
+	const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
+
+	if (!pluginConfig) {
+		throw new Error('Could not load @citation-js/plugin-bibtex');
+	}
+
+	if (typeof CiteConstructor.add !== 'function') {
+		throw new Error('Cite constructor does not support plugin loading');
+	}
+
+	CiteConstructor.add(pluginConfig);
+
+	return CiteConstructor;
 }
 
 export interface SourceData {
@@ -154,7 +145,13 @@ export class BibliographyExporter {
 		// Write bibliography file
 		await this.app.vault.adapter.write(outputPath, bibContent);
 
-		new Notice(`Generated bibliography with ${sources.length} sources`);
+		// Count unique sources (after deduplication)
+		const dedupResult = this.deduplicateSources(sources);
+		const message = dedupResult.duplicatesFound > 0
+			? `Generated bibliography with ${dedupResult.uniqueSources.length} unique sources (${dedupResult.duplicatesFound} duplicates removed)`
+			: `Generated bibliography with ${dedupResult.uniqueSources.length} sources`;
+
+		new Notice(message);
 		return outputPath;
 	}
 
@@ -264,70 +261,81 @@ export class BibliographyExporter {
 			return "% No sources found";
 		}
 
-		try {
-			const cslEntries = sources.map((source) =>
-				this.sourceToCsl(source)
-			);
+		// Deduplicate sources by citekey
+		const deduplicatedSources = this.deduplicateSources(sources);
 
-			// Initialize citation-js properly
-			const CiteConstructor = await initializeCiteJS();
-			if (!CiteConstructor) {
-				throw new Error('Could not initialize citation-js');
-			}
-
-			const cite = new CiteConstructor(cslEntries);
-
-			return cite.format("bibtex", {
-				format: "text",
-				lang: "en-US",
+		// If we found duplicates, notify the user
+		if (deduplicatedSources.duplicatesFound > 0) {
+			const duplicateCitekeys = Array.from(deduplicatedSources.duplicateCitekeys.keys());
+			console.warn(`Found ${deduplicatedSources.duplicatesFound} duplicate citekeys:`, duplicateCitekeys);
+			console.warn('Duplicate sources details:');
+			deduplicatedSources.duplicateCitekeys.forEach((duplicates, citekey) => {
+				console.warn(`- ${citekey}: found ${duplicates.length} instances`);
+				duplicates.forEach(dup => console.warn(`  * ${dup.filepath}`));
 			});
-		} catch (error) {
-			console.warn("citation-js not available, using basic BibTeX generator");
-			// Fallback: generate basic BibTeX manually
-			return this.generateBasicBibtex(sources);
+
+			// Show notice to user
+			new Notice(`Found ${deduplicatedSources.duplicatesFound} duplicate sources. Check console for details and clean up your source files.`);
 		}
+
+		const cslEntries = deduplicatedSources.uniqueSources.map((source) =>
+			this.sourceToCsl(source)
+		);
+
+		// Initialize citation-js - this must work
+		const CiteConstructor = await initializeCiteJS();
+
+		const cite = new CiteConstructor(cslEntries);
+
+		return cite.format("bibtex", {
+			format: "text",
+			lang: "en-US",
+		});
 	}
 
-	private generateBasicBibtex(sources: SourceData[]): string {
-		let bibtex = "";
+	/**
+	 * Deduplicate sources by citekey, keeping the first occurrence
+	 * @returns Object with unique sources, duplicate count, and duplicate details
+	 */
+	private deduplicateSources(sources: SourceData[]): {
+		uniqueSources: SourceData[];
+		duplicatesFound: number;
+		duplicateCitekeys: Map<string, SourceData[]>;
+	} {
+		const sourcesMap = new Map<string, SourceData>();
+		const duplicateCitekeys = new Map<string, SourceData[]>();
+		let duplicatesFound = 0;
 
 		for (const source of sources) {
-			const entryType =
-				source.type === "book"
-					? "book"
-					: source.type === "article"
-					? "article"
-					: source.type === "inproceedings"
-					? "inproceedings"
-					: "misc";
+			if (sourcesMap.has(source.citekey)) {
+				// This is a duplicate
+				duplicatesFound++;
 
-			bibtex += `@${entryType}{${source.citekey},\n`;
-			bibtex += `  title = {${source.title}},\n`;
+				// Track duplicates for reporting
+				if (!duplicateCitekeys.has(source.citekey)) {
+					// Add the original source to the duplicates list for reference
+					const original = sourcesMap.get(source.citekey)!;
+					duplicateCitekeys.set(source.citekey, [original]);
+				}
+				duplicateCitekeys.get(source.citekey)!.push(source);
 
-			if (source.author && source.author.length > 0) {
-				const authorStr = source.author.join(" and ");
-				bibtex += `  author = {${authorStr}},\n`;
+				// Keep the first occurrence (already in sourcesMap)
+				console.warn(`Duplicate citekey found: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`);
+			} else {
+				// First occurrence of this citekey
+				sourcesMap.set(source.citekey, source);
 			}
-
-			bibtex += `  year = {${source.year}},\n`;
-
-			if (source.journal) bibtex += `  journal = {${source.journal}},\n`;
-			if (source.publisher)
-				bibtex += `  publisher = {${source.publisher}},\n`;
-			if (source.pages) bibtex += `  pages = {${source.pages}},\n`;
-			if (source.volume) bibtex += `  volume = {${source.volume}},\n`;
-			if (source.issue) bibtex += `  issue = {${source.issue}},\n`;
-			if (source.doi) bibtex += `  doi = {${source.doi}},\n`;
-			if (source.isbn) bibtex += `  isbn = {${source.isbn}},\n`;
-			if (source.url) bibtex += `  url = {${source.url}},\n`;
-
-			// Remove trailing comma and close entry
-			bibtex = bibtex.replace(/,\n$/, "\n");
-			bibtex += `}\n\n`;
 		}
 
-		return bibtex.trim();
+		const uniqueSources = Array.from(sourcesMap.values());
+
+		return {
+			uniqueSources,
+			duplicatesFound,
+			duplicateCitekeys
+		};
 	}
+
 
 	private sourceToCsl(source: SourceData): any {
 		const csl: any = {
