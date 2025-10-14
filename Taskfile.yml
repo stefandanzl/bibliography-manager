@@ -7,7 +7,7 @@ vars:
     DIR_PLUGIN: "{{.VAULTS_DIR}}/{{.VAULT_NAME}}/.obsidian/plugins/{{.PLUGIN}}"
     VERSION:
         sh: node -e "console.log(require('./package.json').version)"
-    FILES: "main.js manifest.json styles.css"
+    FILES: "main.js manifest.json" # styles.css"
 
 # Rename .env-example to .env and modify for your setup
 dotenv: [".env"]
@@ -20,7 +20,7 @@ tasks:
     copy:
         cmds:
             - cp main.js '{{.DIR_PLUGIN}}/main.js'
-            - cp styles.css '{{.DIR_PLUGIN}}/styles.css'
+            # - cp styles.css '{{.DIR_PLUGIN}}/styles.css'
             - cp manifest.json '{{.DIR_PLUGIN}}/manifest.json'
 
     build:
