@@ -11,11 +11,17 @@ export class SourceService {
 	/**
 	 * Get the sources folder for a given file, checking frontmatter first, then using default
 	 */
-	async getSourcesFolder(file: TFile, defaultSourcesFolder: string): Promise<string> {
+	async getSourcesFolder(
+		file: TFile,
+		defaultSourcesFolder: string
+	): Promise<string> {
 		const fileCache = this.app.metadataCache.getFileCache(file);
 		const frontmatterSourcesFolder = fileCache?.frontmatter?.typst_bib;
 
-		if (frontmatterSourcesFolder && typeof frontmatterSourcesFolder === "string") {
+		if (
+			frontmatterSourcesFolder &&
+			typeof frontmatterSourcesFolder === "string"
+		) {
 			return normalizePath(frontmatterSourcesFolder);
 		}
 
@@ -25,11 +31,16 @@ export class SourceService {
 	/**
 	 * Create a markdown file for a source with proper frontmatter and content
 	 */
-	async createSourceFile(sourceData: SourceData, sourcesFolder: string): Promise<TFile | null> {
+	async createSourceFile(
+		sourceData: SourceData,
+		sourcesFolder: string
+	): Promise<TFile | null> {
 		try {
 			// Ensure sources folder exists
 			const sourceTypeFolder = this.getSourceTypeFolder(sourceData);
-			const fullPath = normalizePath(`${sourcesFolder}/${sourceTypeFolder}`);
+			const fullPath = normalizePath(
+				`${sourcesFolder}/${sourceTypeFolder}`
+			);
 
 			await this.ensureFolderExists(fullPath);
 
@@ -47,7 +58,11 @@ export class SourceService {
 			return file;
 		} catch (error) {
 			console.error("Failed to create source file:", error);
-			new Notice(`Failed to create source file: ${error instanceof Error ? error.message : "Unknown error"}`);
+			new Notice(
+				`Failed to create source file: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
 			return null;
 		}
 	}
@@ -100,7 +115,10 @@ export class SourceService {
 	/**
 	 * Get unique filename by checking existing files and adding "copy" suffix if needed
 	 */
-	private getUniqueFilename(folderPath: string, baseFilename: string): string {
+	private getUniqueFilename(
+		folderPath: string,
+		baseFilename: string
+	): string {
 		const folder = this.app.vault.getAbstractFileByPath(folderPath);
 		if (!(folder instanceof TFolder)) {
 			return baseFilename;
@@ -144,7 +162,9 @@ export class SourceService {
 			if (!folder) {
 				await this.app.vault.createFolder(currentPath);
 			} else if (!(folder instanceof TFolder)) {
-				throw new Error(`Path ${currentPath} exists but is not a folder`);
+				throw new Error(
+					`Path ${currentPath} exists but is not a folder`
+				);
 			}
 		}
 	}
@@ -204,7 +224,10 @@ export class SourceService {
 	/**
 	 * Recursively search for source files
 	 */
-	private async searchSourceFilesRecursive(folder: TFolder, sourceFiles: TFile[]): Promise<void> {
+	private async searchSourceFilesRecursive(
+		folder: TFolder,
+		sourceFiles: TFile[]
+	): Promise<void> {
 		for (const child of folder.children) {
 			if (child instanceof TFile && child.extension === "md") {
 				const cache = this.app.metadataCache.getFileCache(child);
@@ -223,18 +246,75 @@ export class SourceService {
 	async generateBibTeXFromSources(sourcesFolder: string): Promise<string> {
 		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
 		const bibtexEntries: string[] = [];
+		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
+		let duplicatesFound = 0;
+
+		// console.log('DEBUG: Processing sources for BibTeX generation (SourceService):');
+		sourceFiles.forEach((file, index) => {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const frontmatter = cache?.frontmatter;
+			const citekey = frontmatter?.citekey;
+			// console.log(`  ${index + 1}. citekey: "${citekey}", file: "${file.path}"`);
+		});
 
 		for (const file of sourceFiles) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const frontmatter = cache?.frontmatter;
 
 			if (frontmatter && frontmatter.notetype === "source") {
-				const bibtexEntry = this.convertFrontmatterToBibTeX(frontmatter);
-				if (bibtexEntry) {
-					bibtexEntries.push(bibtexEntry);
+				const citekey = frontmatter.citekey;
+
+				if (!citekey) {
+					console.warn(`Source file without citekey: ${file.path}`);
+					continue;
+				}
+
+				// Check for duplicates
+				if (seenCitekeys.has(citekey)) {
+					duplicatesFound++;
+					const existing = seenCitekeys.get(citekey)!;
+					console.warn(`DUPLICATE CITEKEY FOUND: ${citekey}`);
+					console.warn(`  Original: ${existing.file.path}`);
+					console.warn(`  Duplicate: ${file.path}`);
+					console.warn(`  Keeping original, skipping duplicate`);
+
+					// Update count for reporting
+					existing.count++;
+				} else {
+					// First occurrence of this citekey
+					seenCitekeys.set(citekey, { file, count: 1 });
+
+					const bibtexEntry =
+						this.convertFrontmatterToBibTeX(frontmatter);
+					if (bibtexEntry) {
+						bibtexEntries.push(bibtexEntry);
+					}
 				}
 			}
 		}
+
+		if (duplicatesFound > 0) {
+			console.warn(
+				`Found ${duplicatesFound} duplicate citekeys during BibTeX generation`
+			);
+			console.warn("Duplicate details:");
+			seenCitekeys.forEach((data, citekey) => {
+				if (data.count > 1) {
+					console.warn(
+						`- ${citekey}: ${data.count} total occurrences`
+					);
+				}
+			});
+
+			// Show notice to user
+			new Notice(
+				`Found ${duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
+			);
+		}
+
+		console.log(
+			`DEBUG: SourceService BibTeX generation complete. Found ${duplicatesFound} duplicates, ${bibtexEntries.length} unique entries`
+		);
 
 		return bibtexEntries.join("\n\n");
 	}
@@ -248,7 +328,10 @@ export class SourceService {
 		}
 
 		// Map BibTeX type from our custom types
-		const bibType = this.mapToBibTeXType(frontmatter.bibtype, frontmatter.category?.[0]);
+		const bibType = this.mapToBibTeXType(
+			frontmatter.bibtype,
+			frontmatter.category?.[0]
+		);
 
 		let entry = `@${bibType}{${frontmatter.citekey},\n`;
 
@@ -265,7 +348,7 @@ export class SourceService {
 			["doi", frontmatter.doi],
 			["isbn", frontmatter.isbn],
 			["url", frontmatter.url],
-			["abstract", frontmatter.abstract]
+			["abstract", frontmatter.abstract],
 		];
 
 		fields.forEach(([key, value]) => {
@@ -314,18 +397,20 @@ export class SourceService {
 			return null;
 		}
 
-		return authors.map(author => {
-			// Try to format as "Last, First" if not already in that format
-			if (author.includes(",")) {
+		return authors
+			.map((author) => {
+				// Try to format as "Last, First" if not already in that format
+				if (author.includes(",")) {
+					return author;
+				}
+				const parts = author.split(/\s+/);
+				if (parts.length >= 2) {
+					const first = parts.slice(0, -1).join(" ");
+					const last = parts[parts.length - 1];
+					return `${last}, ${first}`;
+				}
 				return author;
-			}
-			const parts = author.split(/\s+/);
-			if (parts.length >= 2) {
-				const first = parts.slice(0, -1).join(" ");
-				const last = parts[parts.length - 1];
-				return `${last}, ${first}`;
-			}
-			return author;
-		}).join(" and ");
+			})
+			.join(" and ");
 	}
 }

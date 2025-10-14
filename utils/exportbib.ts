@@ -15,27 +15,28 @@ async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
 
 	// Use dynamic import for proper module loading
-	const citationCore = await import('@citation-js/core');
+	const citationCore = await import("@citation-js/core");
 
 	// Get the Cite class
-	CiteConstructor = (citationCore as any).default?.Cite ||
-					  (citationCore as any).Cite ||
-					  (citationCore as any).default;
+	CiteConstructor =
+		(citationCore as any).default?.Cite ||
+		(citationCore as any).Cite ||
+		(citationCore as any).default;
 
 	if (!CiteConstructor) {
-		throw new Error('Could not find Cite constructor in citation-js/core');
+		throw new Error("Could not find Cite constructor in citation-js/core");
 	}
 
 	// Load bibtex plugin - this is required
-	const bibtexPlugin = await import('@citation-js/plugin-bibtex');
+	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
 	const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
 
 	if (!pluginConfig) {
-		throw new Error('Could not load @citation-js/plugin-bibtex');
+		throw new Error("Could not load @citation-js/plugin-bibtex");
 	}
 
-	if (typeof CiteConstructor.add !== 'function') {
-		throw new Error('Cite constructor does not support plugin loading');
+	if (typeof CiteConstructor.add !== "function") {
+		throw new Error("Cite constructor does not support plugin loading");
 	}
 
 	CiteConstructor.add(pluginConfig);
@@ -147,9 +148,10 @@ export class BibliographyExporter {
 
 		// Count unique sources (after deduplication)
 		const dedupResult = this.deduplicateSources(sources);
-		const message = dedupResult.duplicatesFound > 0
-			? `Generated bibliography with ${dedupResult.uniqueSources.length} unique sources (${dedupResult.duplicatesFound} duplicates removed)`
-			: `Generated bibliography with ${dedupResult.uniqueSources.length} sources`;
+		const message =
+			dedupResult.duplicatesFound > 0
+				? `Generated bibliography with ${dedupResult.uniqueSources.length} unique sources (${dedupResult.duplicatesFound} duplicates removed)`
+				: `Generated bibliography with ${dedupResult.uniqueSources.length} sources`;
 
 		new Notice(message);
 		return outputPath;
@@ -166,8 +168,15 @@ export class BibliographyExporter {
 			const typstBibSources = await this.collectFromDirectory(
 				config.path
 			);
+			// Deduplicate within typst_bib directory
 			typstBibSources.forEach((source) => {
-				sourcesMap.set(source.citekey, source);
+				if (!sourcesMap.has(source.citekey)) {
+					sourcesMap.set(source.citekey, source);
+				} else {
+					console.warn(
+						`Duplicate citekey in ${config.path}: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`
+					);
+				}
 			});
 		}
 
@@ -176,6 +185,10 @@ export class BibliographyExporter {
 		globalSources.forEach((source) => {
 			if (!sourcesMap.has(source.citekey)) {
 				sourcesMap.set(source.citekey, source);
+			} else {
+				console.warn(
+					`Duplicate citekey in sources directory: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`
+				);
 			}
 		});
 
@@ -266,17 +279,34 @@ export class BibliographyExporter {
 
 		// If we found duplicates, notify the user
 		if (deduplicatedSources.duplicatesFound > 0) {
-			const duplicateCitekeys = Array.from(deduplicatedSources.duplicateCitekeys.keys());
-			console.warn(`Found ${deduplicatedSources.duplicatesFound} duplicate citekeys:`, duplicateCitekeys);
-			console.warn('Duplicate sources details:');
-			deduplicatedSources.duplicateCitekeys.forEach((duplicates, citekey) => {
-				console.warn(`- ${citekey}: found ${duplicates.length} instances`);
-				duplicates.forEach(dup => console.warn(`  * ${dup.filepath}`));
-			});
+			const duplicateCitekeys = Array.from(
+				deduplicatedSources.duplicateCitekeys.keys()
+			);
+			console.warn(
+				`Found ${deduplicatedSources.duplicatesFound} duplicate citekeys:`,
+				duplicateCitekeys
+			);
+			console.warn("Duplicate sources details:");
+			deduplicatedSources.duplicateCitekeys.forEach(
+				(duplicates, citekey) => {
+					console.warn(
+						`- ${citekey}: found ${duplicates.length} instances`
+					);
+					duplicates.forEach((dup) =>
+						console.warn(`  * ${dup.filepath}`)
+					);
+				}
+			);
 
 			// Show notice to user
-			new Notice(`Found ${deduplicatedSources.duplicatesFound} duplicate sources. Check console for details and clean up your source files.`);
+			new Notice(
+				`Found ${deduplicatedSources.duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
+			);
 		}
+
+		console.log(
+			`DEBUG: Original sources: ${sources.length}, Unique sources: ${deduplicatedSources.uniqueSources.length}`
+		);
 
 		const cslEntries = deduplicatedSources.uniqueSources.map((source) =>
 			this.sourceToCsl(source)
@@ -302,14 +332,22 @@ export class BibliographyExporter {
 		duplicatesFound: number;
 		duplicateCitekeys: Map<string, SourceData[]>;
 	} {
+		console.log("DEBUG: Starting deduplication process...");
 		const sourcesMap = new Map<string, SourceData>();
 		const duplicateCitekeys = new Map<string, SourceData[]>();
 		let duplicatesFound = 0;
 
 		for (const source of sources) {
+			console.log(
+				`DEBUG: Processing citekey: "${source.citekey}" from "${source.filepath}"`
+			);
+
 			if (sourcesMap.has(source.citekey)) {
 				// This is a duplicate
 				duplicatesFound++;
+				console.log(
+					`DEBUG: DUPLICATE FOUND for citekey: "${source.citekey}"`
+				);
 
 				// Track duplicates for reporting
 				if (!duplicateCitekeys.has(source.citekey)) {
@@ -320,22 +358,29 @@ export class BibliographyExporter {
 				duplicateCitekeys.get(source.citekey)!.push(source);
 
 				// Keep the first occurrence (already in sourcesMap)
-				console.warn(`Duplicate citekey found: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`);
+				console.warn(
+					`Duplicate citekey found: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`
+				);
 			} else {
 				// First occurrence of this citekey
+				console.log(
+					`DEBUG: First occurrence of citekey: "${source.citekey}"`
+				);
 				sourcesMap.set(source.citekey, source);
 			}
 		}
 
 		const uniqueSources = Array.from(sourcesMap.values());
+		console.log(
+			`DEBUG: Deduplication complete. Found ${duplicatesFound} duplicates, ${uniqueSources.length} unique sources`
+		);
 
 		return {
 			uniqueSources,
 			duplicatesFound,
-			duplicateCitekeys
+			duplicateCitekeys,
 		};
 	}
-
 
 	private sourceToCsl(source: SourceData): any {
 		const csl: any = {
