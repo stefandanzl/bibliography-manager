@@ -273,10 +273,7 @@ export class SourceService {
 				if (seenCitekeys.has(citekey)) {
 					duplicatesFound++;
 					const existing = seenCitekeys.get(citekey)!;
-					console.warn(`DUPLICATE CITEKEY FOUND: ${citekey}`);
-					console.warn(`  Original: ${existing.file.path}`);
-					console.warn(`  Duplicate: ${file.path}`);
-					console.warn(`  Keeping original, skipping duplicate`);
+					console.log(`%cDUPLICATE CITEKEY FOUND: ${citekey}%c\nOriginal: ${existing.file.path}\nDuplicate: ${file.path}`, 'color: #7f6df2; font-weight: bold;', 'color: #7f6df2;');
 
 					// Update count for reporting
 					existing.count++;
@@ -297,7 +294,7 @@ export class SourceService {
 			console.warn(
 				`Found ${duplicatesFound} duplicate citekeys during BibTeX generation`
 			);
-			console.warn("Duplicate details:");
+			// console.warn("Duplicate details:");
 			seenCitekeys.forEach((data, citekey) => {
 				if (data.count > 1) {
 					console.warn(

@@ -1,8 +1,8 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
-import { BibliographyExporter, CitekeyGenerator } from './utils/exportbib';
-import { SourceService } from './utils/sourceService';
-import { SourceData } from './utils/sourceManager';
-import { getBibliographyCommands } from './utils/bibliographyCommands';
+import { App, Plugin, PluginSettingTab, Setting, Notice } from "obsidian";
+import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
+import { SourceService } from "./utils/sourceService";
+import { SourceData } from "./utils/sourceManager";
+import { getBibliographyCommands } from "./utils/bibliographyCommands";
 
 // Plugin settings interface
 export interface BibliographySettings {
@@ -14,10 +14,10 @@ export interface BibliographySettings {
 
 // Default settings
 const DEFAULT_SETTINGS: BibliographySettings = {
-	sourcesFolder: 'sources',
-	bibliographyFilename: 'bibliography.bib',
+	sourcesFolder: "sources",
+	bibliographyFilename: "bibliography.bib",
 	autoGenerate: false,
-	supportedFileTypes: ['pdf', 'epub', 'txt']
+	supportedFileTypes: ["pdf", "epub", "txt"],
 };
 
 // API interface that other plugins can use
@@ -37,7 +37,7 @@ export interface BibliographyAPI {
 	exportBibliographyToPath(config: {
 		sourcesFolder?: string;
 		outputPath: string;
-		format?: 'bibtex' | 'csl-json';
+		format?: "bibtex" | "csl-json";
 	}): Promise<string>;
 
 	/**
@@ -64,14 +64,15 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	async onload() {
 		try {
-			console.log('Loading Bibliography Manager plugin');
-
 			// Load settings with error handling
 			await this.loadSettings();
 
 			// Initialize services with error handling
 			this.sourceService = new SourceService(this.app);
-			this.bibliographyExporter = new BibliographyExporter(this.app, this.settings);
+			this.bibliographyExporter = new BibliographyExporter(
+				this.app,
+				this.settings
+			);
 
 			// Set up API for other plugins
 			this.api = this.createAPI();
@@ -87,34 +88,43 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 			// Initialize sources folder if it doesn't exist
 			await this.initializeSourcesFolder();
-
-			console.log('Bibliography Manager plugin loaded successfully');
 		} catch (error) {
-			console.error('Error loading Bibliography Manager plugin:', error);
-			new Notice('Error loading Bibliography Manager plugin. Check console for details.');
+			console.error("Error loading Bibliography Manager plugin:", error);
+			new Notice(
+				"Error loading Bibliography Manager plugin. Check console for details."
+			);
 		}
 	}
 
 	onunload() {
 		// Clean up API reference safely
 		try {
-			if ((this.app as any).plugins?.plugins?.['bibliography-manager']) {
-				delete (this.app as any).plugins.plugins['bibliography-manager'];
+			if ((this.app as any).plugins?.plugins?.["bibliography-manager"]) {
+				delete (this.app as any).plugins.plugins[
+					"bibliography-manager"
+				];
 			}
 		} catch (error) {
-			console.warn('Error cleaning up plugin API:', error);
+			console.warn("Error cleaning up plugin API:", error);
 		}
-		console.log('Bibliography Manager plugin unloaded');
+		console.log("Bibliography Manager plugin unloaded");
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 		// Update services with new settings
-		this.bibliographyExporter = new BibliographyExporter(this.app, this.settings);
+		this.bibliographyExporter = new BibliographyExporter(
+			this.app,
+			this.settings
+		);
 	}
 
 	private createAPI(): BibliographyAPI {
@@ -122,17 +132,23 @@ export default class BibliographyManagerPlugin extends Plugin {
 			// Generate BibTeX content from sources
 			generateBibliography: async (config = {}) => {
 				try {
-					const sourcesFolder = config.sourcesFolder || this.settings.sourcesFolder;
-					const bibContent = await this.sourceService.generateBibTeXFromSources(sourcesFolder);
+					const sourcesFolder =
+						config.sourcesFolder || this.settings.sourcesFolder;
+					const bibContent =
+						await this.sourceService.generateBibTeXFromSources(
+							sourcesFolder
+						);
 
-					if (!bibContent || bibContent.trim() === '') {
-						throw new Error('No sources found or failed to generate bibliography');
+					if (!bibContent || bibContent.trim() === "") {
+						throw new Error(
+							"No sources found or failed to generate bibliography"
+						);
 					}
 
 					console.log(`Generated bibliography from ${sourcesFolder}`);
 					return bibContent;
 				} catch (error) {
-					console.error('Failed to generate bibliography:', error);
+					console.error("Failed to generate bibliography:", error);
 					throw error;
 				}
 			},
@@ -140,23 +156,38 @@ export default class BibliographyManagerPlugin extends Plugin {
 			// Export bibliography to a specific path
 			exportBibliographyToPath: async (config) => {
 				try {
-					const sourcesFolder = config.sourcesFolder || this.settings.sourcesFolder;
-					const bibContent = await this.sourceService.generateBibTeXFromSources(sourcesFolder);
+					const sourcesFolder =
+						config.sourcesFolder || this.settings.sourcesFolder;
+					const bibContent =
+						await this.sourceService.generateBibTeXFromSources(
+							sourcesFolder
+						);
 
 					// Ensure output directory exists
-					const outputDir = config.outputPath.substring(0, config.outputPath.lastIndexOf('/'));
-					if (outputDir && !(await this.app.vault.adapter.exists(outputDir))) {
+					const outputDir = config.outputPath.substring(
+						0,
+						config.outputPath.lastIndexOf("/")
+					);
+					if (
+						outputDir &&
+						!(await this.app.vault.adapter.exists(outputDir))
+					) {
 						await this.app.vault.adapter.mkdir(outputDir);
 					}
 
 					// Write bibliography file
-					await this.app.vault.adapter.write(config.outputPath, bibContent);
+					await this.app.vault.adapter.write(
+						config.outputPath,
+						bibContent
+					);
 
 					new Notice(`Bibliography exported to ${config.outputPath}`);
-					console.log(`Bibliography exported to ${config.outputPath}`);
+					console.log(
+						`Bibliography exported to ${config.outputPath}`
+					);
 					return config.outputPath;
 				} catch (error) {
-					console.error('Failed to export bibliography:', error);
+					console.error("Failed to export bibliography:", error);
 					throw error;
 				}
 			},
@@ -165,7 +196,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 			getAllSources: async (sourcesFolder?: string) => {
 				try {
 					const folder = sourcesFolder || this.settings.sourcesFolder;
-					const sourceFiles = await this.sourceService.findAllSourceFiles(folder);
+					const sourceFiles =
+						await this.sourceService.findAllSourceFiles(folder);
 					const sources: SourceData[] = [];
 
 					for (const file of sourceFiles) {
@@ -174,14 +206,16 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 						if (frontmatter && frontmatter.notetype === "source") {
 							sources.push({
-								citekey: frontmatter.citekey || '',
+								citekey: frontmatter.citekey || "",
 								author: frontmatter.author || [],
 								category: frontmatter.category || [],
-								bibtype: frontmatter.bibtype || 'misc',
+								bibtype: frontmatter.bibtype || "misc",
 								title: frontmatter.title || file.basename,
-								notetype: 'source',
+								notetype: "source",
 								year: frontmatter.year?.toString(),
-								pages: frontmatter.pages ? parseInt(frontmatter.pages) : undefined,
+								pages: frontmatter.pages
+									? parseInt(frontmatter.pages)
+									: undefined,
 								abstract: frontmatter.abstract,
 								publisher: frontmatter.publisher,
 								journal: frontmatter.journal,
@@ -199,14 +233,14 @@ export default class BibliographyManagerPlugin extends Plugin {
 								currentpage: frontmatter.currentpage,
 								status: frontmatter.status,
 								filelink: frontmatter.filelink,
-								aliases: frontmatter.aliases
+								aliases: frontmatter.aliases,
 							});
 						}
 					}
 
 					return sources;
 				} catch (error) {
-					console.error('Failed to get all sources:', error);
+					console.error("Failed to get all sources:", error);
 					throw error;
 				}
 			},
@@ -224,10 +258,10 @@ export default class BibliographyManagerPlugin extends Plugin {
 						new Notice(`Source imported: ${newFile.basename}`);
 						return newFile.path;
 					} else {
-						throw new Error('Failed to create source file');
+						throw new Error("Failed to create source file");
 					}
 				} catch (error) {
-					console.error('Failed to import source:', error);
+					console.error("Failed to import source:", error);
 					throw error;
 				}
 			},
@@ -236,54 +270,66 @@ export default class BibliographyManagerPlugin extends Plugin {
 			generateCitekey: (sourceData) => {
 				try {
 					const authors = sourceData.author || [];
-					const year = sourceData.year ? parseInt(sourceData.year.toString()) : new Date().getFullYear();
-					const title = sourceData.title || 'Untitled';
+					const year = sourceData.year
+						? parseInt(sourceData.year.toString())
+						: new Date().getFullYear();
+					const title = sourceData.title || "Untitled";
 
-					return CitekeyGenerator.generateFromTitleAndAuthors(title, authors, year);
+					return CitekeyGenerator.generateFromTitleAndAuthors(
+						title,
+						authors,
+						year
+					);
 				} catch (error) {
-					console.error('Failed to generate citekey:', error);
+					console.error("Failed to generate citekey:", error);
 					// Fallback to a simple citekey
 					const timestamp = Date.now().toString(36);
 					return `SRC${timestamp}`;
 				}
-			}
+			},
 		};
 	}
 
 	private registerCommands() {
 		const commands = getBibliographyCommands(this.app);
 
-		commands.forEach(command => {
+		commands.forEach((command) => {
 			this.addCommand(command);
 		});
 
 		// Additional plugin-specific commands
 		this.addCommand({
-			id: 'show-sources-folder',
-			name: 'Show sources folder',
+			id: "show-sources-folder",
+			name: "Show sources folder",
 			callback: () => {
-				const folder = this.app.vault.getAbstractFileByPath(this.settings.sourcesFolder);
+				const folder = this.app.vault.getAbstractFileByPath(
+					this.settings.sourcesFolder
+				);
 				if (folder) {
 					this.app.workspace.getLeaf(true).openFile(folder as any);
 				} else {
-					new Notice(`Sources folder '${this.settings.sourcesFolder}' not found`);
+					new Notice(
+						`Sources folder '${this.settings.sourcesFolder}' not found`
+					);
 				}
-			}
+			},
 		});
 
 		this.addCommand({
-			id: 'generate-bibliography-file',
-			name: 'Generate bibliography file',
+			id: "generate-bibliography-file",
+			name: "Generate bibliography file",
 			callback: async () => {
 				try {
 					const bibPath = `${this.settings.sourcesFolder}/${this.settings.bibliographyFilename}`;
 					await this.api.exportBibliographyToPath({
-						outputPath: bibPath
+						outputPath: bibPath,
 					});
 				} catch (error) {
-					new Notice(`Failed to generate bibliography: ${error.message}`);
+					new Notice(
+						`Failed to generate bibliography: ${error.message}`
+					);
 				}
-			}
+			},
 		});
 	}
 
@@ -293,27 +339,31 @@ export default class BibliographyManagerPlugin extends Plugin {
 			if (!(this.app as any).plugins.plugins) {
 				(this.app as any).plugins.plugins = {};
 			}
-			(this.app as any).plugins.plugins['bibliography-manager'] = {
+			(this.app as any).plugins.plugins["bibliography-manager"] = {
 				api: this.api,
-				version: '1.0.0'
+				version: "1.0.0",
 			};
 		} catch (error) {
-			console.warn('Could not expose plugin API:', error);
+			console.warn("Could not expose plugin API:", error);
 		}
 	}
 
 	private async initializeSourcesFolder() {
 		try {
 			// Check if folder exists using adapter to avoid triggering file events
-			const folderExists = await this.app.vault.adapter.exists(this.settings.sourcesFolder);
+			const folderExists = await this.app.vault.adapter.exists(
+				this.settings.sourcesFolder
+			);
 
 			if (!folderExists) {
 				// Create folder using adapter directly to avoid triggering unnecessary events
 				await this.app.vault.adapter.mkdir(this.settings.sourcesFolder);
-				console.log(`Created sources folder: ${this.settings.sourcesFolder}`);
+				console.log(
+					`Created sources folder: ${this.settings.sourcesFolder}`
+				);
 			}
 		} catch (error) {
-			console.warn('Could not initialize sources folder:', error);
+			console.warn("Could not initialize sources folder:", error);
 			// Don't throw error - plugin can work without the sources folder
 		}
 	}
@@ -331,56 +381,64 @@ class BibliographySettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'Bibliography Manager Settings' });
+		containerEl.createEl("h2", { text: "Bibliography Manager Settings" });
 
 		new Setting(containerEl)
-			.setName('Sources folder')
-			.setDesc('Folder where source files are stored')
-			.addText(text => text
-				.setPlaceholder('sources')
-				.setValue(this.plugin.settings.sourcesFolder)
-				.onChange(async (value) => {
-					this.plugin.settings.sourcesFolder = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Sources folder")
+			.setDesc("Folder where source files are stored")
+			.addText((text) =>
+				text
+					.setPlaceholder("sources")
+					.setValue(this.plugin.settings.sourcesFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.sourcesFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Bibliography filename')
-			.setDesc('Default filename for generated bibliography files')
-			.addText(text => text
-				.setPlaceholder('bibliography.bib')
-				.setValue(this.plugin.settings.bibliographyFilename)
-				.onChange(async (value) => {
-					this.plugin.settings.bibliographyFilename = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Bibliography filename")
+			.setDesc("Default filename for generated bibliography files")
+			.addText((text) =>
+				text
+					.setPlaceholder("bibliography.bib")
+					.setValue(this.plugin.settings.bibliographyFilename)
+					.onChange(async (value) => {
+						this.plugin.settings.bibliographyFilename = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Auto-generate on export')
-			.setDesc('Automatically generate bibliography when other plugins request it')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoGenerate)
-				.onChange(async (value) => {
-					this.plugin.settings.autoGenerate = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Auto-generate on export")
+			.setDesc(
+				"Automatically generate bibliography when other plugins request it"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoGenerate)
+					.onChange(async (value) => {
+						this.plugin.settings.autoGenerate = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
-		containerEl.createEl('h3', { text: 'API Usage' });
+		containerEl.createEl("h3", { text: "API Usage" });
 
 		const apiInfo = containerEl.createDiv();
-		apiInfo.createEl('p', {
-			text: 'Other plugins can access this plugin\'s API through:',
-			cls: 'setting-item-description'
+		apiInfo.createEl("p", {
+			text: "Other plugins can access this plugin's API through:",
+			cls: "setting-item-description",
 		});
 
-		const codeBlock = apiInfo.createEl('pre', { cls: 'api-usage-example' });
-		codeBlock.createEl('code', {
+		const codeBlock = apiInfo.createEl("pre", { cls: "api-usage-example" });
+		codeBlock.createEl("code", {
 			text: `const bibPlugin = app.plugins.plugins['bibliography-manager'];
 if (bibPlugin?.api) {
   const bibContent = await bibPlugin.api.generateBibliography({
     sourcesFolder: 'sources'
   });
-}`
+}`,
 		});
 	}
 }
