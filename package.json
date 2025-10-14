@@ -16,7 +16,7 @@
 		"sources",
 		"academic"
 	],
-	"author": "Your Name",
+	"author": "Stefan Danzl",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^16.11.6",

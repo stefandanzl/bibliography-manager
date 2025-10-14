@@ -15,19 +15,34 @@ async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
 
 	try {
+		// Try to use global citation-js if available (for Obsidian environment)
+		if ((window as any).Cite) {
+			CiteConstructor = (window as any).Cite;
+			return CiteConstructor;
+		}
+
 		// Use dynamic import for proper module loading
 		const citationCore = await import('@citation-js/core');
-		const bibtexPlugin = await import('@citation-js/plugin-bibtex');
 
-		// Initialize the plugin - try different import patterns
-		const CiteClass = (citationCore as any).default || (citationCore as any).Cite;
-		const bibtexConfig = (bibtexPlugin as any).default || bibtexPlugin;
+		// Try different import patterns for the Cite class
+		CiteConstructor = (citationCore as any).default?.Cite ||
+						  (citationCore as any).Cite ||
+						  (citationCore as any).default;
 
-		if (CiteClass && bibtexConfig) {
-			CiteClass.add(bibtexConfig);
-			CiteConstructor = CiteClass;
-		} else {
-			throw new Error('Could not initialize citation-js plugins');
+		if (!CiteConstructor) {
+			throw new Error('Could not find Cite constructor in citation-js/core');
+		}
+
+		// Try to load bibtex plugin if available
+		try {
+			const bibtexPlugin = await import('@citation-js/plugin-bibtex');
+			const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
+
+			if (pluginConfig && typeof CiteConstructor.add === 'function') {
+				CiteConstructor.add(pluginConfig);
+			}
+		} catch (pluginError) {
+			console.warn('Could not load bibtex plugin, using basic functionality:', pluginError);
 		}
 
 		return CiteConstructor;

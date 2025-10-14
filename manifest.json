@@ -4,8 +4,8 @@
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Manage bibliographies and sources with BibTeX export, DOI/ISBN lookup, and API for other plugins",
-	"author": "Your Name",
-	"authorUrl": "",
+	"author": "Stefan Danzl",
+	"authorUrl": "https://github.com/stefandanzl",
 	"fundingUrl": "",
 	"isDesktopOnly": false
 }

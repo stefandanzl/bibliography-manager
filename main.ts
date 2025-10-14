@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
-import { BibliographyExporter, SourceImporter, CitekeyGenerator } from './utils/exportbib';
+import { BibliographyExporter, CitekeyGenerator } from './utils/exportbib';
 import { SourceService } from './utils/sourceService';
-import { SourceImportModal, SourceData } from './utils/sourceManager';
+import { SourceData } from './utils/sourceManager';
 import { getBibliographyCommands } from './utils/bibliographyCommands';
 
 // Plugin settings interface
@@ -63,39 +63,46 @@ export default class BibliographyManagerPlugin extends Plugin {
 	api: BibliographyAPI;
 
 	async onload() {
-		console.log('Loading Bibliography Manager plugin');
+		try {
+			console.log('Loading Bibliography Manager plugin');
 
-		// Load settings
-		await this.loadSettings();
+			// Load settings with error handling
+			await this.loadSettings();
 
-		// Initialize services
-		this.sourceService = new SourceService(this.app);
-		this.bibliographyExporter = new BibliographyExporter(this.app, this.settings);
+			// Initialize services with error handling
+			this.sourceService = new SourceService(this.app);
+			this.bibliographyExporter = new BibliographyExporter(this.app, this.settings);
 
-		// Set up API for other plugins
-		this.api = this.createAPI();
+			// Set up API for other plugins
+			this.api = this.createAPI();
 
-		// Expose API for other plugins
-		(this.app as any).plugins.plugins['bibliography-manager'] = {
-			api: this.api
-		};
+			// Expose API for other plugins - use safer approach
+			this.exposeAPI();
 
-		// Register commands
-		this.registerCommands();
+			// Register commands
+			this.registerCommands();
 
-		// Add settings tab
-		this.addSettingTab(new BibliographySettingTab(this.app, this));
+			// Add settings tab
+			this.addSettingTab(new BibliographySettingTab(this.app, this));
 
-		// Initialize sources folder if it doesn't exist
-		await this.initializeSourcesFolder();
+			// Initialize sources folder if it doesn't exist
+			await this.initializeSourcesFolder();
 
-		console.log('Bibliography Manager plugin loaded');
+			console.log('Bibliography Manager plugin loaded successfully');
+		} catch (error) {
+			console.error('Error loading Bibliography Manager plugin:', error);
+			new Notice('Error loading Bibliography Manager plugin. Check console for details.');
+		}
 	}
 
 	onunload() {
-		// Clean up API reference
-		if ((this.app as any).plugins.plugins['bibliography-manager']) {
-			delete (this.app as any).plugins.plugins['bibliography-manager'];
+		// Clean up API reference safely
+		try {
+			if ((this.app as any).plugins?.plugins?.['bibliography-manager']) {
+				delete (this.app as any).plugins.plugins['bibliography-manager'];
+			}
+		} catch (error) {
+			console.warn('Error cleaning up plugin API:', error);
 		}
 		console.log('Bibliography Manager plugin unloaded');
 	}
@@ -280,15 +287,34 @@ export default class BibliographyManagerPlugin extends Plugin {
 		});
 	}
 
+	private exposeAPI() {
+		try {
+			// Expose API for other plugins - use safer approach
+			if (!(this.app as any).plugins.plugins) {
+				(this.app as any).plugins.plugins = {};
+			}
+			(this.app as any).plugins.plugins['bibliography-manager'] = {
+				api: this.api,
+				version: '1.0.0'
+			};
+		} catch (error) {
+			console.warn('Could not expose plugin API:', error);
+		}
+	}
+
 	private async initializeSourcesFolder() {
 		try {
-			const folder = this.app.vault.getAbstractFileByPath(this.settings.sourcesFolder);
-			if (!folder) {
-				await this.app.vault.createFolder(this.settings.sourcesFolder);
+			// Check if folder exists using adapter to avoid triggering file events
+			const folderExists = await this.app.vault.adapter.exists(this.settings.sourcesFolder);
+
+			if (!folderExists) {
+				// Create folder using adapter directly to avoid triggering unnecessary events
+				await this.app.vault.adapter.mkdir(this.settings.sourcesFolder);
 				console.log(`Created sources folder: ${this.settings.sourcesFolder}`);
 			}
 		} catch (error) {
-			console.error('Failed to initialize sources folder:', error);
+			console.warn('Could not initialize sources folder:', error);
+			// Don't throw error - plugin can work without the sources folder
 		}
 	}
 }
