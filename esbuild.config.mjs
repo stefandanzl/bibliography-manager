@@ -31,6 +31,11 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
+		"@citation-js/core",
+		"@citation-js/plugin-doi",
+		"@citation-js/plugin-isbn",
+		"@citation-js/plugin-bibtex",
+		"@citation-js/plugin-wikidata",
 		...builtins],
 	format: "cjs",
 	target: "es2018",
@@ -38,7 +43,7 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
-});
+	});
 
 if (prod) {
 	await context.rebuild();

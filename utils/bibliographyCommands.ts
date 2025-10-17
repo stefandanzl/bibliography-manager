@@ -1,12 +1,6 @@
 import { App, Editor, MarkdownView, Notice, Modal, Setting, parseYaml, stringifyYaml } from 'obsidian';
 import { CitekeyGenerator, SourceImporter } from './exportbib';
-
-// @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite } from "@citation-js/core";
-import "@citation-js/plugin-doi";
-import "@citation-js/plugin-isbn";
-import "@citation-js/plugin-bibtex";
-import "@citation-js/plugin-wikidata";
+import { BrowserImportService } from './browserImportService';
 
 export class GenerateCitekeyCommand {
   constructor(private app: App) {}
@@ -157,9 +151,11 @@ export class BibliographyExportModal extends Modal {
 export class SourceImportModal extends Modal {
   private sourceData: any = {};
   private mediaType: string = 'Paper';
+  private importService: BrowserImportService;
 
   constructor(app: App) {
     super(app);
+    this.importService = new BrowserImportService(app);
   }
 
   onOpen() {
@@ -344,29 +340,18 @@ export class SourceImportModal extends Modal {
 
       new Notice('Fetching metadata from URL...');
 
-      const cite = new Cite(this.sourceData.url);
-      const data = await cite.format("data", { format: "object" });
-
-      if (!data || data.length === 0) {
-        // Fallback to basic website data
-        this.createBasicWebsiteData(this.sourceData.url);
-        new Notice('Created basic website entry (no metadata found)');
-        return;
-      }
-
-      const citationData = data[0];
+      const citationData = await this.importService.fetchURLMetadata(this.sourceData.url);
 
       // Update sourceData with fetched metadata
       this.sourceData.title = citationData.title || this.sourceData.title;
-      this.sourceData.author = this.extractAuthors(citationData);
-      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.year?.toString() || this.sourceData.year;
-      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.author = citationData.authors || this.sourceData.author;
+      this.sourceData.year = citationData.year || this.sourceData.year;
+      this.sourceData.journal = citationData.journal || this.sourceData.journal;
       this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
       this.sourceData.abstract = citationData.abstract;
-      this.sourceData.doi = citationData.DOI;
-      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.doi = citationData.doi;
+      this.sourceData.url = citationData.url || this.sourceData.url;
+      this.sourceData.citekey = citationData.citekey;
 
       // Generate citekey if not present
       if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
@@ -384,9 +369,7 @@ export class SourceImportModal extends Modal {
 
     } catch (error) {
       console.error('URL metadata fetch error:', error);
-      // Fallback to basic website data
-      this.createBasicWebsiteData(this.sourceData.url);
-      new Notice('Created basic website entry (metadata fetch failed)');
+      new Notice(`URL metadata fetch failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 
@@ -399,32 +382,21 @@ export class SourceImportModal extends Modal {
 
       new Notice('Looking up DOI...');
 
-      // Clean DOI input
-      const cleanDOI = this.sourceData.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
-
-      const cite = new Cite(cleanDOI);
-      const data = await cite.format("data", { format: "object" });
-
-      if (!data || data.length === 0) {
-        throw new Error("No data found for this DOI");
-      }
-
-      const citationData = data[0];
+      const citationData = await this.importService.lookupDOI(this.sourceData.doi);
 
       // Update sourceData with fetched metadata
       this.sourceData.title = citationData.title || this.sourceData.title;
-      this.sourceData.author = this.extractAuthors(citationData);
-      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.year?.toString() || this.sourceData.year;
-      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.author = citationData.authors || this.sourceData.author;
+      this.sourceData.year = citationData.year || this.sourceData.year;
+      this.sourceData.journal = citationData.journal || this.sourceData.journal;
       this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
       this.sourceData.abstract = citationData.abstract;
-      this.sourceData.doi = citationData.DOI || this.sourceData.doi;
-      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.doi = citationData.doi || this.sourceData.doi;
+      this.sourceData.url = citationData.url || this.sourceData.url;
       this.sourceData.volume = citationData.volume;
-      this.sourceData.number = citationData.issue;
-      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+      this.sourceData.number = citationData.number;
+      this.sourceData.pages = citationData.pages;
+      this.sourceData.citekey = citationData.citekey;
 
       // Generate citekey if not present
       if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
@@ -455,31 +427,22 @@ export class SourceImportModal extends Modal {
 
       new Notice('Parsing BibTeX...');
 
-      const cite = new Cite(this.sourceData.bibtex);
-      const data = await cite.format("data", { format: "object" });
-
-      if (!data || data.length === 0) {
-        throw new Error("Invalid BibTeX format");
-      }
-
-      const citationData = data[0];
+      const citationData = this.importService.parseBibTeX(this.sourceData.bibtex);
 
       // Update sourceData with parsed metadata
       this.sourceData.title = citationData.title || this.sourceData.title;
-      this.sourceData.author = this.extractAuthors(citationData);
-      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.year?.toString() || this.sourceData.year;
-      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.author = citationData.authors || this.sourceData.author;
+      this.sourceData.year = citationData.year || this.sourceData.year;
+      this.sourceData.journal = citationData.journal || this.sourceData.journal;
       this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
-      this.sourceData.abstract = citationData.abstract;
-      this.sourceData.doi = citationData.DOI;
-      this.sourceData.isbn = citationData.ISBN;
-      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.doi = citationData.doi;
+      this.sourceData.isbn = citationData.isbn;
+      this.sourceData.url = citationData.url || this.sourceData.url;
       this.sourceData.volume = citationData.volume;
-      this.sourceData.number = citationData.issue;
-      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
-      this.sourceData.bibtype = citationData.type || "misc";
+      this.sourceData.number = citationData.number;
+      this.sourceData.pages = citationData.pages;
+      this.sourceData.bibtype = citationData.bibtype || "misc";
+      this.sourceData.citekey = citationData.citekey;
 
       // Generate citekey if not present
       if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
@@ -510,30 +473,18 @@ export class SourceImportModal extends Modal {
 
       new Notice('Looking up ISBN...');
 
-      // Clean ISBN input
-      const cleanISBN = this.sourceData.isbn.replace(/[-\s]/g, "");
-
-      const cite = new Cite(cleanISBN);
-      const data = await cite.format("data", { format: "object" });
-
-      if (!data || data.length === 0) {
-        throw new Error("No data found for this ISBN");
-      }
-
-      const citationData = data[0];
+      const citationData = await this.importService.lookupISBN(this.sourceData.isbn);
 
       // Update sourceData with fetched metadata
       this.sourceData.title = citationData.title || this.sourceData.title;
-      this.sourceData.author = this.extractAuthors(citationData);
-      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-                          citationData.year?.toString() || this.sourceData.year;
+      this.sourceData.author = citationData.authors || this.sourceData.author;
+      this.sourceData.year = citationData.year || this.sourceData.year;
       this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
-      this.sourceData.abstract = citationData.abstract;
-      this.sourceData.isbn = citationData.ISBN || this.sourceData.isbn;
-      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
-      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
-      this.sourceData.bibtype = citationData.type || "book";
+      this.sourceData.isbn = citationData.isbn || this.sourceData.isbn;
+      this.sourceData.url = citationData.url || this.sourceData.url;
+      this.sourceData.pages = citationData.pages;
+      this.sourceData.bibtype = citationData.bibtype || "book";
+      this.sourceData.citekey = citationData.citekey;
 
       // Generate citekey if not present
       if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
