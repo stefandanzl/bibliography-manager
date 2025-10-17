@@ -69,5 +69,7 @@ tasks:
             - gh release create {{.VERSION}} --title "{{.VERSION}}" --notes "New release of the {{.PLUGIN}} plugin for Obsidian." {{.FILES}}
 
     test:
+        desc: "Run import functionality tests"
         cmds:
-            - echo {{.VERSION}}
+            - echo "🧪 Testing {{.PLUGIN}} v{{.VERSION}} Import Functionality"
+            - node test-import-functionality.js

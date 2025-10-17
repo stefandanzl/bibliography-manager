@@ -1,7 +1,12 @@
 {
-	"permissions": {
-		"allow": ["Bash(npm run build:*)", "Bash(task:*)"],
-		"deny": [],
-		"ask": []
-	}
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(task:*)",
+      "Bash(npm test)",
+      "Bash(node:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
 }

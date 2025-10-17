@@ -1,6 +1,13 @@
 import { App, Editor, MarkdownView, Notice, Modal, Setting, parseYaml, stringifyYaml } from 'obsidian';
 import { CitekeyGenerator, SourceImporter } from './exportbib';
 
+// @ts-ignore - citation-js doesn't have official TypeScript types
+import { Cite } from "@citation-js/core";
+import "@citation-js/plugin-doi";
+import "@citation-js/plugin-isbn";
+import "@citation-js/plugin-bibtex";
+import "@citation-js/plugin-wikidata";
+
 export class GenerateCitekeyCommand {
   constructor(private app: App) {}
 
@@ -167,6 +174,7 @@ export class SourceImportModal extends Modal {
 
     const urlButton = methodContainer.createEl('button', { text: '🔗 URL' }) as HTMLButtonElement;
     const doiButton = methodContainer.createEl('button', { text: '📄 DOI' }) as HTMLButtonElement;
+    const isbnButton = methodContainer.createEl('button', { text: '📖 ISBN' }) as HTMLButtonElement;
     const bibtexButton = methodContainer.createEl('button', { text: '📚 BibTeX' }) as HTMLButtonElement;
     const manualButton = methodContainer.createEl('button', { text: '✏️ Manual' }) as HTMLButtonElement;
 
@@ -203,6 +211,7 @@ export class SourceImportModal extends Modal {
     // Event handlers
     urlButton.onclick = () => this.showUrlImport(contentArea);
     doiButton.onclick = () => this.showDoiImport(contentArea);
+    isbnButton.onclick = () => this.showIsbnImport(contentArea);
     bibtexButton.onclick = () => this.showBibtexImport(contentArea);
     manualButton.onclick = () => this.showManualImport(contentArea);
 
@@ -240,6 +249,22 @@ export class SourceImportModal extends Modal {
 
     const lookupButton = container.createEl('button', { text: 'Lookup DOI' }) as HTMLButtonElement;
     lookupButton.onclick = () => this.lookupDoi();
+  }
+
+  private showIsbnImport(container: any) {
+    container.empty();
+
+    const isbnSetting = new Setting(container)
+      .setName('ISBN')
+      .setDesc('Enter the ISBN of the book')
+      .addText(text => text
+        .setPlaceholder('978-0-123456-78-9')
+        .onChange(value => {
+          this.sourceData.isbn = value;
+        }));
+
+    const lookupButton = container.createEl('button', { text: 'Lookup ISBN' }) as HTMLButtonElement;
+    lookupButton.onclick = () => this.lookupIsbn();
   }
 
   private showBibtexImport(container: any) {
@@ -311,15 +336,281 @@ export class SourceImportModal extends Modal {
   }
 
   private async fetchUrlMetadata() {
-    new Notice('URL metadata fetching not implemented yet');
+    try {
+      if (!this.sourceData.url) {
+        new Notice('Please enter a URL first');
+        return;
+      }
+
+      new Notice('Fetching metadata from URL...');
+
+      const cite = new Cite(this.sourceData.url);
+      const data = await cite.format("data", { format: "object" });
+
+      if (!data || data.length === 0) {
+        // Fallback to basic website data
+        this.createBasicWebsiteData(this.sourceData.url);
+        new Notice('Created basic website entry (no metadata found)');
+        return;
+      }
+
+      const citationData = data[0];
+
+      // Update sourceData with fetched metadata
+      this.sourceData.title = citationData.title || this.sourceData.title;
+      this.sourceData.author = this.extractAuthors(citationData);
+      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.year?.toString() || this.sourceData.year;
+      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+      this.sourceData.abstract = citationData.abstract;
+      this.sourceData.doi = citationData.DOI;
+      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+
+      // Generate citekey if not present
+      if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
+        this.sourceData.citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+          this.sourceData.title,
+          this.sourceData.author,
+          this.sourceData.year
+        );
+      }
+
+      new Notice('Metadata fetched successfully');
+
+      // Show updated data to user
+      this.showUpdatedData();
+
+    } catch (error) {
+      console.error('URL metadata fetch error:', error);
+      // Fallback to basic website data
+      this.createBasicWebsiteData(this.sourceData.url);
+      new Notice('Created basic website entry (metadata fetch failed)');
+    }
   }
 
   private async lookupDoi() {
-    new Notice('DOI lookup not implemented yet');
+    try {
+      if (!this.sourceData.doi) {
+        new Notice('Please enter a DOI first');
+        return;
+      }
+
+      new Notice('Looking up DOI...');
+
+      // Clean DOI input
+      const cleanDOI = this.sourceData.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
+
+      const cite = new Cite(cleanDOI);
+      const data = await cite.format("data", { format: "object" });
+
+      if (!data || data.length === 0) {
+        throw new Error("No data found for this DOI");
+      }
+
+      const citationData = data[0];
+
+      // Update sourceData with fetched metadata
+      this.sourceData.title = citationData.title || this.sourceData.title;
+      this.sourceData.author = this.extractAuthors(citationData);
+      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.year?.toString() || this.sourceData.year;
+      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+      this.sourceData.abstract = citationData.abstract;
+      this.sourceData.doi = citationData.DOI || this.sourceData.doi;
+      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.volume = citationData.volume;
+      this.sourceData.number = citationData.issue;
+      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+
+      // Generate citekey if not present
+      if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
+        this.sourceData.citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+          this.sourceData.title,
+          this.sourceData.author,
+          this.sourceData.year
+        );
+      }
+
+      new Notice('DOI lookup successful');
+
+      // Show updated data to user
+      this.showUpdatedData();
+
+    } catch (error) {
+      console.error('DOI lookup error:', error);
+      new Notice(`DOI lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   }
 
   private async parseBibtex() {
-    new Notice('BibTeX parsing not implemented yet');
+    try {
+      if (!this.sourceData.bibtex) {
+        new Notice('Please enter BibTeX entry first');
+        return;
+      }
+
+      new Notice('Parsing BibTeX...');
+
+      const cite = new Cite(this.sourceData.bibtex);
+      const data = await cite.format("data", { format: "object" });
+
+      if (!data || data.length === 0) {
+        throw new Error("Invalid BibTeX format");
+      }
+
+      const citationData = data[0];
+
+      // Update sourceData with parsed metadata
+      this.sourceData.title = citationData.title || this.sourceData.title;
+      this.sourceData.author = this.extractAuthors(citationData);
+      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.year?.toString() || this.sourceData.year;
+      this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+      this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+      this.sourceData.abstract = citationData.abstract;
+      this.sourceData.doi = citationData.DOI;
+      this.sourceData.isbn = citationData.ISBN;
+      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.volume = citationData.volume;
+      this.sourceData.number = citationData.issue;
+      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+      this.sourceData.bibtype = citationData.type || "misc";
+
+      // Generate citekey if not present
+      if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
+        this.sourceData.citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+          this.sourceData.title,
+          this.sourceData.author,
+          this.sourceData.year
+        );
+      }
+
+      new Notice('BibTeX parsing successful');
+
+      // Show updated data to user
+      this.showUpdatedData();
+
+    } catch (error) {
+      console.error('BibTeX parsing error:', error);
+      new Notice(`BibTeX parsing failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  private async lookupIsbn() {
+    try {
+      if (!this.sourceData.isbn) {
+        new Notice('Please enter an ISBN first');
+        return;
+      }
+
+      new Notice('Looking up ISBN...');
+
+      // Clean ISBN input
+      const cleanISBN = this.sourceData.isbn.replace(/[-\s]/g, "");
+
+      const cite = new Cite(cleanISBN);
+      const data = await cite.format("data", { format: "object" });
+
+      if (!data || data.length === 0) {
+        throw new Error("No data found for this ISBN");
+      }
+
+      const citationData = data[0];
+
+      // Update sourceData with fetched metadata
+      this.sourceData.title = citationData.title || this.sourceData.title;
+      this.sourceData.author = this.extractAuthors(citationData);
+      this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
+                          citationData.year?.toString() || this.sourceData.year;
+      this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+      this.sourceData.abstract = citationData.abstract;
+      this.sourceData.isbn = citationData.ISBN || this.sourceData.isbn;
+      this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+      this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+      this.sourceData.bibtype = citationData.type || "book";
+
+      // Generate citekey if not present
+      if (!this.sourceData.citekey && this.sourceData.title && this.sourceData.author && this.sourceData.year) {
+        this.sourceData.citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+          this.sourceData.title,
+          this.sourceData.author,
+          this.sourceData.year
+        );
+      }
+
+      new Notice('ISBN lookup successful');
+
+      // Show updated data to user
+      this.showUpdatedData();
+
+    } catch (error) {
+      console.error('ISBN lookup error:', error);
+      new Notice(`ISBN lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  private createBasicWebsiteData(url: string) {
+    this.sourceData.title = this.sourceData.title || this.extractTitleFromURL(url);
+    this.sourceData.author = this.sourceData.author || [];
+    this.sourceData.year = this.sourceData.year || new Date().getFullYear().toString();
+    this.sourceData.url = url;
+    this.sourceData.type = 'webpage';
+
+    if (!this.sourceData.citekey && this.sourceData.title) {
+      this.sourceData.citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+        this.sourceData.title,
+        this.sourceData.author,
+        parseInt(this.sourceData.year)
+      );
+    }
+  }
+
+  private extractAuthors(citationData: any): string[] {
+    const authors = citationData.author || [];
+    return authors.map((author: any) => {
+      if (author.literal) return author.literal;
+      if (author.family && author.given) {
+        return `${author.family}, ${author.given}`;
+      }
+      if (author.family) return author.family;
+      return "Unknown Author";
+    });
+  }
+
+  private extractTitleFromURL(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split("/").filter(part => part.length > 0);
+      const lastPart = pathParts[pathParts.length - 1];
+
+      if (lastPart) {
+        // Convert dashes and underscores to spaces and capitalize
+        return lastPart.replace(/[-_]/g, " ")
+                      .replace(/\b\w/g, l => l.toUpperCase());
+      } else {
+        return urlObj.hostname;
+      }
+    } catch {
+      return "Website Source";
+    }
+  }
+
+  private showUpdatedData() {
+    let message = 'Updated data:\n';
+    if (this.sourceData.title) message += `Title: ${this.sourceData.title}\n`;
+    if (this.sourceData.author && this.sourceData.author.length > 0) {
+      message += `Authors: ${this.sourceData.author.join(', ')}\n`;
+    }
+    if (this.sourceData.year) message += `Year: ${this.sourceData.year}\n`;
+    if (this.sourceData.citekey) message += `Citekey: ${this.sourceData.citekey}\n`;
+
+    console.log(message);
   }
 
   private async importSource() {
