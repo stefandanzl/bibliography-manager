@@ -1,5 +1,5 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
-import { SourceData, SourceType } from "./sourceManager";
+import { SourceData, SourceType, convertLatexToUnicode } from "./bibtexImport";
 
 export class SourceService {
 	app: App;
@@ -182,10 +182,16 @@ export class SourceService {
 
 			if (Array.isArray(value)) {
 				if (value.length > 0) {
-					content += `${key}: ${JSON.stringify(value)}\n`;
+					// Convert LaTeX in array elements (like authors)
+					const convertedArray = value.map(item =>
+						typeof item === "string" ? convertLatexToUnicode(item) : item
+					);
+					content += `${key}: ${JSON.stringify(convertedArray)}\n`;
 				}
 			} else if (typeof value === "string") {
-				content += `${key}: "${value}"\n`;
+				// Convert LaTeX in string fields
+				const convertedValue = convertLatexToUnicode(value);
+				content += `${key}: "${convertedValue}"\n`;
 			} else {
 				content += `${key}: ${value}\n`;
 			}

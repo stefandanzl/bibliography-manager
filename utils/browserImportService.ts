@@ -1,4 +1,5 @@
 import { App, Notice } from "obsidian";
+import { parse as bibtexParse, convertLatexToUnicode } from "./bibtexImport";
 
 // Browser-compatible import service using direct API calls
 export class BrowserImportService {
@@ -120,87 +121,32 @@ export class BrowserImportService {
 
     parseBibTeX(bibtex: string): any {
         try {
-            // Simple BibTeX parser (basic implementation)
-            const result: any = {};
+            // Use the new bibtex parser
+            const parsed = bibtexParse(bibtex);
 
-            // Extract citekey
-            const citekeyMatch = bibtex.match(/^@\w+\{([^,]+)/);
-            if (citekeyMatch) {
-                result.citekey = citekeyMatch[1].trim();
+            if (!parsed || parsed.length === 0) {
+                throw new Error("Invalid BibTeX format");
             }
 
-            // Extract type
-            const typeMatch = bibtex.match(/^@(\w+)/);
-            if (typeMatch) {
-                result.bibtype = typeMatch[1].toLowerCase();
-            }
+            const sourceData = parsed[0];
 
-            // Extract title
-            const titleMatch = bibtex.match(/title\s*=\s*\{([^}]+)\}/);
-            if (titleMatch) {
-                result.title = titleMatch[1].replace(/\{([^}]+)\}/g, '$1'); // Remove extra braces
-            }
-
-            // Extract author
-            const authorMatch = bibtex.match(/author\s*=\s*\{([^}]+)\}/);
-            if (authorMatch) {
-                const authorString = authorMatch[1];
-                result.author = this.parseBibTeXAuthors(authorString);
-            }
-
-            // Extract year
-            const yearMatch = bibtex.match(/year\s*=\s*\{([^}]+)\}/);
-            if (yearMatch) {
-                result.year = yearMatch[1];
-            }
-
-            // Extract journal
-            const journalMatch = bibtex.match(/journal\s*=\s*\{([^}]+)\}/);
-            if (journalMatch) {
-                result.journal = journalMatch[1];
-            }
-
-            // Extract publisher
-            const publisherMatch = bibtex.match(/publisher\s*=\s*\{([^}]+)\}/);
-            if (publisherMatch) {
-                result.publisher = publisherMatch[1];
-            }
-
-            // Extract volume
-            const volumeMatch = bibtex.match(/volume\s*=\s*\{([^}]+)\}/);
-            if (volumeMatch) {
-                result.volume = volumeMatch[1];
-            }
-
-            // Extract number/issue
-            const numberMatch = bibtex.match(/number\s*=\s*\{([^}]+)\}/);
-            if (numberMatch) {
-                result.number = numberMatch[1];
-            }
-
-            // Extract pages
-            const pagesMatch = bibtex.match(/pages\s*=\s*\{([^}]+)\}/);
-            if (pagesMatch) {
-                result.pages = pagesMatch[1];
-            }
-
-            // Extract DOI
-            const doiMatch = bibtex.match(/doi\s*=\s*\{([^}]+)\}/);
-            if (doiMatch) {
-                result.doi = doiMatch[1];
-            }
-
-            // Extract URL
-            const urlMatch = bibtex.match(/url\s*=\s*\{([^}]+)\}/);
-            if (urlMatch) {
-                result.url = urlMatch[1];
-            }
-
-            // Extract ISBN
-            const isbnMatch = bibtex.match(/isbn\s*=\s*\{([^}]+)\}/);
-            if (isbnMatch) {
-                result.isbn = isbnMatch[1];
-            }
+            // Convert to the format expected by the UI with LaTeX conversion
+            const result: any = {
+                citekey: sourceData.citekey,
+                bibtype: sourceData.bibtype,
+                title: convertLatexToUnicode(sourceData.title || ''),
+                author: Array.isArray(sourceData.author) ? sourceData.author.map((author: string) => convertLatexToUnicode(author)) : [],
+                year: sourceData.year || '',
+                journal: convertLatexToUnicode(sourceData.journal || ''),
+                publisher: convertLatexToUnicode(sourceData.publisher || ''),
+                volume: sourceData.volume || '',
+                number: sourceData.number || '',
+                pages: sourceData.pages?.toString() || '',
+                doi: sourceData.doi || '',
+                url: sourceData.url || sourceData.downloadurl || '',
+                isbn: sourceData.isbn || '',
+                abstract: sourceData.abstract ? convertLatexToUnicode(sourceData.abstract) : undefined
+            };
 
             return result;
 
