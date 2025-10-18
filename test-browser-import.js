@@ -108,9 +108,12 @@ async function testOpenLibraryAPI() {
   }
 }
 
-function testBibTeXParser() {
-  console.log('\n📚 Testing BibTeX Parser...');
+async function testBibTeXParser() {
+  console.log('\n📚 Testing BibTeX Parser (@retorquere/bibtex-parser)...');
   try {
+    // Import the bibtex-parser library
+    const { parse } = await import('@retorquere/bibtex-parser');
+
     const bibtex = `@article{einstein1905,
       title={On the electrodynamics of moving bodies},
       author={Einstein, Albert and Maxwell, James},
@@ -122,42 +125,69 @@ function testBibTeXParser() {
       publisher={Wiley Online Library}
     }`;
 
-    // Simple BibTeX parsing logic (mirrors browser implementation)
-    const result = {};
+    const parsed = parse(bibtex);
 
-    const citekeyMatch = bibtex.match(/^@\w+\{([^,]+)/);
-    if (citekeyMatch) result.citekey = citekeyMatch[1].trim();
-
-    const titleMatch = bibtex.match(/title\s*=\s*\{([^}]+)\}/);
-    if (titleMatch) result.title = titleMatch[1].replace(/\{([^}]+)\}/g, '$1');
-
-    const authorMatch = bibtex.match(/author\s*=\s*\{([^}]+)\}/);
-    if (authorMatch) {
-      const authorString = authorMatch[1];
-      result.authors = authorString.split(/\s+and\s+/).map(author => {
-        author = author.trim();
-        if (author.includes(',')) {
-          const [family, given] = author.split(',').map(s => s.trim());
-          return `${family}, ${given}`;
-        }
-        return author;
-      });
+    if (parsed && parsed.length > 0) {
+      const entry = parsed[0];
+      console.log(`✅ BibTeX Parser SUCCESS`);
+      console.log(`   Title: ${entry.title?.substring(0, 50)}...`);
+      console.log(`   Author: ${entry.author}`);
+      console.log(`   Year: ${entry.year}`);
+      console.log(`   Type: ${entry.type}`);
+      console.log(`   Key: ${entry.key}`);
+      return true;
+    } else {
+      console.log('❌ BibTeX Parser FAILED - No data returned');
+      return false;
     }
-
-    const yearMatch = bibtex.match(/year\s*=\s*\{([^}]+)\}/);
-    if (yearMatch) result.year = yearMatch[1];
-
-    const journalMatch = bibtex.match(/journal\s*=\s*\{([^}]+)\}/);
-    if (journalMatch) result.journal = journalMatch[1];
-
-    console.log(`✅ BibTeX Parser SUCCESS`);
-    console.log(`   Title: ${result.title?.substring(0, 50)}...`);
-    console.log(`   Authors: ${result.authors?.length || 0} found`);
-    console.log(`   Year: ${result.year || 'N/A'}`);
-    console.log(`   Citekey: ${result.citekey || 'N/A'}`);
-    return true;
   } catch (error) {
     console.log(`❌ BibTeX Parser FAILED - ${error.message}`);
+    return false;
+  }
+}
+
+async function testLatexUnicodeConversion() {
+  console.log('\n🔤 Testing LaTeX to Unicode conversion...');
+  try {
+    const { latexToUnicode } = await import('latex-to-unicode');
+
+    const latexText = "M{\\o}nster and \\alpha\\beta\\gamma";
+    const unicodeText = latexToUnicode(latexText);
+
+    if (unicodeText && unicodeText !== latexText) {
+      console.log(`✅ LaTeX to Unicode conversion SUCCESS`);
+      console.log(`   Input: ${latexText}`);
+      console.log(`   Output: ${unicodeText}`);
+      return true;
+    } else {
+      console.log('❌ LaTeX to Unicode conversion FAILED - No conversion');
+      return false;
+    }
+  } catch (error) {
+    console.log(`❌ LaTeX to Unicode conversion FAILED - ${error.message}`);
+    return false;
+  }
+}
+
+async function testUnicodeLatexConversion() {
+  console.log('\n🔤 Testing Unicode to LaTeX conversion...');
+  try {
+    const unicode2latex = await import('unicode2latex');
+
+    const unicodeText = "Mønster and αβγ";
+    const latexText = unicode2latex.convert(unicodeText);
+
+    if (latexText && latexText !== unicodeText) {
+      console.log(`✅ Unicode to LaTeX conversion SUCCESS`);
+      console.log(`   Input: ${unicodeText}`);
+      console.log(`   Output: ${latexText}`);
+      return true;
+    } else {
+      console.log('❌ Unicode to LaTeX conversion FAILED - No conversion');
+      return false;
+    }
+  } catch (error) {
+    console.log(`❌ Unicode to LaTeX conversion FAILED - ${error.message}`);
     return false;
   }
 }
@@ -191,6 +221,8 @@ async function testBrowserCompatibility() {
     { name: 'Crossref API', test: testCrossrefAPI },
     { name: 'Open Library API', test: testOpenLibraryAPI },
     { name: 'BibTeX Parser', test: testBibTeXParser },
+    { name: 'LaTeX to Unicode', test: testLatexUnicodeConversion },
+    { name: 'Unicode to LaTeX', test: testUnicodeLatexConversion },
     { name: 'arXiv API', test: testArXivAPI }
   ];
 
@@ -215,13 +247,14 @@ async function testBrowserCompatibility() {
     console.log('⚠️ Some imports may have issues, but basic functionality should work.');
   }
 
-  console.log('\n📝 Browser-Compatible Features:');
+  console.log('\n📝 New Library Features:');
   console.log('- DOI Import: Uses Crossref API directly');
   console.log('- ISBN Import: Uses Open Library API directly');
-  console.log('- BibTeX Import: Custom parser implementation');
+  console.log('- BibTeX Import: @retorquere/bibtex-parser implementation');
+  console.log('- LaTeX ↔ Unicode: Special character conversion with latex-to-unicode & unicode2latex');
   console.log('- URL Import: Handles DOI URLs and arXiv URLs');
   console.log('- arXiv Support: Parses arXiv XML responses');
-  console.log('- No Node.js dependencies: Pure browser-compatible code');
+  console.log('- Better performance: Replaced citation-js with focused libraries');
 }
 
 // Run the test

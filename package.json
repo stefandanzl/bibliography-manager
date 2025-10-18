@@ -33,12 +33,5 @@
 		"ts-jest": "^29.4.5",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
-	},
-	"dependencies": {
-		"@citation-js/core": "^0.7.18",
-		"@citation-js/plugin-bibtex": "^0.7.18",
-		"@citation-js/plugin-doi": "^0.7.18",
-		"@citation-js/plugin-isbn": "^0.4.0",
-		"@citation-js/plugin-wikidata": "^0.7.20"
 	}
 }

@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
 import { SourceService } from "./utils/sourceService";
-import { SourceData } from "./utils/sourceManager";
+import { SourceData } from "./utils/bibtexImport";
 import { getBibliographyCommands } from "./utils/bibliographyCommands";
 
 // Plugin settings interface

@@ -7,62 +7,8 @@ import {
 	stringifyYaml,
 } from "obsidian";
 import type { BibliographySettings } from "../main";
+import { SourceData, generateBibtex, parseBibTeX } from "./bibtexImport";
 
-// Initialize citation-js properly for browser environment
-let CiteConstructor: any = null;
-
-async function initializeCiteJS() {
-	if (CiteConstructor) return CiteConstructor;
-
-	// Use dynamic import for proper module loading
-	const citationCore = await import("@citation-js/core");
-
-	// Get the Cite class
-	CiteConstructor =
-		(citationCore as any).default?.Cite ||
-		(citationCore as any).Cite ||
-		(citationCore as any).default;
-
-	if (!CiteConstructor) {
-		throw new Error("Could not find Cite constructor in citation-js/core");
-	}
-
-	// Load bibtex plugin - this is required
-	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
-	const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
-
-	if (!pluginConfig) {
-		throw new Error("Could not load @citation-js/plugin-bibtex");
-	}
-
-	if (typeof CiteConstructor.add !== "function") {
-		throw new Error("Cite constructor does not support plugin loading");
-	}
-
-	CiteConstructor.add(pluginConfig);
-
-	return CiteConstructor;
-}
-
-export interface SourceData {
-	citekey: string;
-	title: string;
-	author: string[];
-	year: number;
-	type: "book" | "article" | "inproceedings" | "website" | "misc";
-	journal?: string;
-	publisher?: string;
-	pages?: string;
-	volume?: string;
-	issue?: string;
-	doi?: string;
-	isbn?: string;
-	url?: string;
-	abstract?: string;
-	keywords?: string[];
-	note?: string;
-	filepath: string; // Path to the source file
-}
 
 export interface BibliographyConfig {
 	mode: "directory" | "file";
@@ -248,20 +194,29 @@ export class BibliographyExporter {
 				citekey: yaml.citekey,
 				title: yaml.title || file.basename,
 				author: yaml.author || [],
-				year: yaml.year || new Date().getFullYear(),
-				type: yaml.type || "misc",
-				journal: yaml.journal,
+				year: yaml.year?.toString() || new Date().getFullYear().toString(),
+				bibtype: yaml.type || "misc",
+				category: yaml.category || ["other"],
+				downloadurl: yaml.downloadurl || yaml.url,
+				imageurl: yaml.imageurl,
+				added: yaml.added,
+				started: yaml.started,
+				ended: yaml.ended,
+				rating: yaml.rating,
+				pages: yaml.pages ? parseInt(yaml.pages) : undefined,
+				currentpage: yaml.currentpage ? parseInt(yaml.currentpage) : undefined,
+				status: yaml.status,
+				filelink: yaml.filelink,
+				notetype: "source",
+				aliases: yaml.aliases,
+				abstract: yaml.abstract,
 				publisher: yaml.publisher,
-				pages: yaml.pages,
+				journal: yaml.journal,
 				volume: yaml.volume,
-				issue: yaml.issue,
+				number: yaml.number || yaml.issue,
 				doi: yaml.doi,
 				isbn: yaml.isbn,
 				url: yaml.url,
-				abstract: yaml.abstract,
-				keywords: yaml.keywords,
-				note: yaml.note,
-				filepath: file.path,
 			};
 		} catch (error) {
 			console.error(`Error extracting source from ${file.path}:`, error);
@@ -293,7 +248,7 @@ export class BibliographyExporter {
 						`- ${citekey}: found ${duplicates.length} instances`
 					);
 					duplicates.forEach((dup) =>
-						console.warn(`  * ${dup.filepath}`)
+						console.warn(`  * ${dup.filepath || "unknown location"}`)
 					);
 				}
 			);
@@ -308,19 +263,8 @@ export class BibliographyExporter {
 			`DEBUG: Original sources: ${sources.length}, Unique sources: ${deduplicatedSources.uniqueSources.length}`
 		);
 
-		const cslEntries = deduplicatedSources.uniqueSources.map((source) =>
-			this.sourceToCsl(source)
-		);
-
-		// Initialize citation-js - this must work
-		const CiteConstructor = await initializeCiteJS();
-
-		const cite = new CiteConstructor(cslEntries);
-
-		return cite.format("bibtex", {
-			format: "text",
-			lang: "en-US",
-		});
+		// Use the new generateBibtex function from bibtexImport.ts
+		return generateBibtex(deduplicatedSources.uniqueSources);
 	}
 
 	/**
@@ -338,8 +282,9 @@ export class BibliographyExporter {
 		let duplicatesFound = 0;
 
 		for (const source of sources) {
+			const location = source.filepath || "unknown location";
 			console.log(
-				`DEBUG: Processing citekey: "${source.citekey}" from "${source.filepath}"`
+				`DEBUG: Processing citekey: "${source.citekey}" from "${location}"`
 			);
 
 			if (sourcesMap.has(source.citekey)) {
@@ -359,7 +304,7 @@ export class BibliographyExporter {
 
 				// Keep the first occurrence (already in sourcesMap)
 				console.warn(
-					`Duplicate citekey found: ${source.citekey} (file: ${source.filepath}), keeping first occurrence`
+					`Duplicate citekey found: ${source.citekey} (location: ${location}), keeping first occurrence`
 				);
 			} else {
 				// First occurrence of this citekey
@@ -382,59 +327,7 @@ export class BibliographyExporter {
 		};
 	}
 
-	private sourceToCsl(source: SourceData): any {
-		const csl: any = {
-			id: source.citekey,
-			title: source.title,
-			type: this.mapTypstTypeToCsl(source.type),
-			issued: { "date-parts": [[source.year]] },
-		};
-
-		// Handle authors
-		if (source.author && source.author.length > 0) {
-			csl.author = source.author.map((authorName) => {
-				const parts = authorName.split(",").map((p) => p.trim());
-				if (parts.length === 2) {
-					// "Smith, John" format
-					return { family: parts[0], given: parts[1] };
-				} else {
-					// "John Smith" format
-					const words = parts[0].split(" ");
-					return {
-						family: words[words.length - 1],
-						given: words.slice(0, -1).join(" "),
-					};
-				}
-			});
-		}
-
-		// Add other fields based on type
-		if (source.journal) csl["container-title"] = source.journal;
-		if (source.publisher) csl.publisher = source.publisher;
-		if (source.pages) csl.page = source.pages;
-		if (source.volume) csl.volume = source.volume;
-		if (source.issue) csl.issue = source.issue;
-		if (source.doi) csl.DOI = source.doi;
-		if (source.isbn) csl.ISBN = source.isbn;
-		if (source.url) csl.URL = source.url;
-		if (source.abstract) csl.abstract = source.abstract;
-		if (source.keywords) csl.keyword = source.keywords;
-
-		return csl;
-	}
-
-	private mapTypstTypeToCsl(typstType: string): string {
-		const typeMap: { [key: string]: string } = {
-			book: "book",
-			article: "article-journal",
-			inproceedings: "paper-conference",
-			website: "webpage",
-			misc: "document",
-		};
-
-		return typeMap[typstType] || "document";
-	}
-
+	
 	private async ensureDirectoryExists(dirPath: string): Promise<void> {
 		if (!(await this.app.vault.adapter.exists(dirPath))) {
 			await this.app.vault.adapter.mkdir(dirPath);
@@ -507,18 +400,27 @@ export class SourceImporter {
 		);
 
 		// Create readable filename from title
-		const filename =
-			CitekeyGenerator.sanitizeFilename(sourceData.title) + ".md";
+		let baseFilename = CitekeyGenerator.sanitizeFilename(sourceData.title);
 		const sourceFolder = this.app.vault.getAbstractFileByPath("sources");
 		const targetFolder =
 			sourceFolder instanceof TFolder
 				? `${sourceFolder.path}/${mediaType}`
 				: `sources/${mediaType}`;
 
-		const filePath = `${targetFolder}/${filename}`;
-
 		// Ensure directory exists
 		await this.ensureDirectoryExists(targetFolder);
+
+		// Find a unique filename to avoid conflicts
+		let filename = baseFilename + ".md";
+		let filePath = `${targetFolder}/${filename}`;
+		let counter = 1;
+
+		// Keep adding suffixes until we find an unused filename
+		while (await this.app.vault.adapter.exists(filePath)) {
+			filename = `${baseFilename} (${counter}).md`;
+			filePath = `${targetFolder}/${filename}`;
+			counter++;
+		}
 
 		const content = this.generateSourceMarkdown({ ...sourceData, citekey });
 
