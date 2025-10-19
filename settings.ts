@@ -28,12 +28,12 @@ export const DEFAULT_SETTINGS: BibliographySettings = {
 	supportedFileTypes: ["pdf", "epub", "txt"],
 	crossrefEmail: "",
 	sourceNoteTemplate: `---
-notetype: source
 citekey: {{citekey}}
 title: "{{title}}"
 author: [{{#author}}{{.}}{{#unless @last}}, {{/unless}}{{/author}}]
 year: {{year}}
 bibtype: {{bibtype}}
+aliases: [{{atcitekey}}]
 {{#doi}}doi: {{doi}}{{/doi}}
 {{#isbn}}isbn: {{isbn}}{{/isbn}}
 {{#publisher}}publisher: {{publisher}}{{/isbn}}
@@ -62,6 +62,7 @@ bibtype: {{bibtype}}
 	templateFile: "",
 	fieldMappings: {
 		citekey: "citekey",
+		atcitekey: "citekey",
 		title: "title",
 		author: "author",
 		year: "year",
@@ -123,54 +124,54 @@ class FolderSuggest extends AbstractInputSuggest<string> {
 	}
 }
 
-// Template file suggestion class for autocompleting template files
+// Template file suggestion class for autocompleting markdown files
 class TemplateFileSuggest extends AbstractInputSuggest<string> {
-	private templateFiles: string[];
+	private filesAndFolders: string[];
 
 	constructor(app: App, private inputEl: HTMLInputElement) {
 		super(app, inputEl);
-		this.templateFiles = this.getTemplateFiles();
+		this.filesAndFolders = this.getAllMarkdownFiles();
 	}
 
-	private getTemplateFiles(): string[] {
-		const files: string[] = [];
+	private getAllMarkdownFiles(): string[] {
+		const items: string[] = [];
+		const folders = this.app.vault.getAllFolders().map(folder => folder.path);
 
-		// Get markdown files from all directories
-		this.app.vault.getFiles().forEach((file) => {
+		// Add root folder and all other folders first
+		items.push(""); // root
+		folders.forEach(folder => {
+			items.push(folder);
+		});
+
+		// Then add all markdown files
+		this.app.vault.getFiles().forEach(file => {
 			if (file.extension === "md") {
-				// Add files with common template-related names
-				const filename = file.basename.toLowerCase();
-				if (
-					filename.includes("template") ||
-					filename.includes("sourcenote") ||
-					filename.includes("bibliography") ||
-					filename.includes("note")
-				) {
-					files.push(file.path);
-				}
+				items.push(file.path);
 			}
 		});
 
-		return files.sort();
+		return items.sort();
 	}
 
 	getInstructions(): string {
-		return "Type to filter template files";
+		return "Type to filter markdown files and folders";
 	}
 
 	getSuggestions(inputStr: string): string[] {
 		const inputLower = inputStr.toLowerCase();
-		return this.templateFiles.filter((file) =>
-			file.toLowerCase().includes(inputLower)
+		return this.filesAndFolders.filter(item =>
+			item.toLowerCase().includes(inputLower)
 		);
 	}
 
-	renderSuggestion(filePath: string, el: HTMLElement): void {
-		el.createEl("div", { text: filePath });
+	renderSuggestion(item: string, el: HTMLElement): void {
+		// Show empty string as "/" for root folder
+		const displayText = item === "" ? "/" : item;
+		el.createEl("div", { text: displayText });
 	}
 
-	selectSuggestion(filePath: string, evt: MouseEvent | KeyboardEvent): void {
-		this.inputEl.value = filePath;
+	selectSuggestion(item: string, evt: MouseEvent | KeyboardEvent): void {
+		this.inputEl.value = item;
 		this.inputEl.dispatchEvent(new Event("input"));
 		this.close();
 	}

@@ -4,6 +4,7 @@
 
 # Core bibliographic fields
 citekey: citekey
+atcitekey: citekey
 title: title
 author: author
 year: year

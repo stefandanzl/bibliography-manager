@@ -65,6 +65,20 @@ export class GenerateCitekeyCommand {
 
 			// Update frontmatter with citekey
 			yaml.citekey = citekey;
+
+			// Add @citekey to aliases if not already present
+			if (!yaml.aliases) {
+				yaml.aliases = [`@${citekey}`];
+			} else if (Array.isArray(yaml.aliases)) {
+				if (!yaml.aliases.includes(`@${citekey}`)) {
+					yaml.aliases.push(`@${citekey}`);
+				}
+			} else {
+				// Convert string alias to array and add @citekey
+				const existingAliases = typeof yaml.aliases === 'string' ? [yaml.aliases] : [];
+				yaml.aliases = [...existingAliases, `@${citekey}`];
+			}
+
 			const newYaml = stringifyYaml(yaml);
 			const newContent = content.replace(
 				/^---\n[\s\S]*?\n---/,
@@ -757,16 +771,25 @@ export class SourceImportModal extends Modal {
 
 	private async importSource() {
 		try {
+			console.log('🚀 DEBUG: importSource called');
+			console.log('📋 Source data:', JSON.stringify(this.sourceData, null, 2));
+			console.log('🗂️ Media type:', this.mediaType);
+			console.log('📁 Settings sources folder:', this.settings.sourcesFolder);
+			console.log('📝 Settings template (first 100 chars):', this.settings.sourceNoteTemplate?.substring(0, 100));
+			console.log('🔧 Settings field mappings:', JSON.stringify(this.settings.fieldMappings, null, 2));
+
 			const importer = new SourceImporter(
-			this.app,
-			this.settings.sourcesFolder,
-			this.settings.sourceNoteTemplate,
-			this.settings.fieldMappings
-		);
+				this.app,
+				this.settings.sourcesFolder,
+				this.settings.sourceNoteTemplate,
+				this.settings.fieldMappings
+			);
 			const newFile = await importer.createSourceFile(
 				this.sourceData,
 				this.mediaType
 			);
+
+			console.log('✅ File created successfully:', newFile.path);
 
 			// Open in new tab
 			await this.app.workspace.getLeaf(true).openFile(newFile);

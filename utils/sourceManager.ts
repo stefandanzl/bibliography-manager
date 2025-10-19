@@ -105,8 +105,7 @@ export interface SourceData {
 	status?: string;
 	filelink?: string;
 	title: string;
-	notetype: "source";
-	aliases?: string[];
+		aliases?: string[];
 	// Additional fields that might come from citation-js
 	abstract?: string;
 	publisher?: string;
@@ -333,8 +332,7 @@ export class SourceImportModal extends Modal {
 			year,
 			added: new Date().toISOString().split("T")[0],
 			title: citationData.title || "Untitled Source",
-			notetype: "source",
-			aliases: [`@${citekey}`],
+						aliases: [`@${citekey}`],
 			abstract: citationData.abstract,
 			publisher: citationData.publisher,
 			journal: citationData["container-title"],
@@ -360,8 +358,7 @@ export class SourceImportModal extends Modal {
 			year: new Date().getFullYear().toString(),
 			added: new Date().toISOString().split("T")[0],
 			title: this.extractTitleFromURL(url),
-			notetype: "source",
-			aliases: [`@${citekey}`],
+						aliases: [`@${citekey}`],
 			url,
 		};
 	}

@@ -262,8 +262,7 @@ export class SourceService {
 	 */
 	private generateBasicSourceContent(sourceData: SourceData): string {
 		let content = "---\n";
-		content += `notetype: source\n`;
-		content += `citekey: ${sourceData.citekey || ''}\n`;
+	content += `citekey: ${sourceData.citekey || ''}\n`;
 		content += `title: "${sourceData.title || 'Untitled'}"\n`;
 
 		if (sourceData.author && Array.isArray(sourceData.author) && sourceData.author.length > 0) {
@@ -319,7 +318,7 @@ export class SourceService {
 		for (const child of folder.children) {
 			if (child instanceof TFile && child.extension === "md") {
 				const cache = this.app.metadataCache.getFileCache(child);
-				if (cache?.frontmatter?.notetype === "source") {
+				if (cache?.frontmatter?.citekey) {
 					sourceFiles.push(child);
 				}
 			} else if (child instanceof TFolder) {
@@ -349,7 +348,7 @@ export class SourceService {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const frontmatter = cache?.frontmatter;
 
-			if (frontmatter && frontmatter.notetype === "source") {
+			if (frontmatter) {
 				const citekey = frontmatter.citekey;
 
 				if (!citekey) {

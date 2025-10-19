@@ -334,14 +334,13 @@ category: category
 						const cache = this.app.metadataCache.getFileCache(file);
 						const frontmatter = cache?.frontmatter;
 
-						if (frontmatter && frontmatter.notetype === "source") {
+						if (frontmatter && frontmatter.citekey) {
 							sources.push({
 								citekey: frontmatter.citekey || "",
 								author: frontmatter.author || [],
 								category: frontmatter.category || [],
 								bibtype: frontmatter.bibtype || "misc",
 								title: frontmatter.title || file.basename,
-								notetype: "source",
 								year: frontmatter.year?.toString(),
 								pages: frontmatter.pages
 									? parseInt(frontmatter.pages)

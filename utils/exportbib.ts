@@ -509,11 +509,17 @@ export class SourceImporter {
 	) {}
 
 	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
+		console.log('🚀 DEBUG: createSourceFile called');
+		console.log('📋 Source data input:', JSON.stringify(sourceData, null, 2));
+		console.log('🗂️ Media type:', mediaType);
+		console.log('📁 Sources folder:', this.sourcesFolder);
+
 		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
 			sourceData.title,
 			sourceData.author || [],
 			sourceData.year
 		);
+		console.log('🔑 Generated citekey:', citekey);
 
 		// Create readable filename from title
 		const filename =
@@ -525,14 +531,27 @@ export class SourceImporter {
 				: `${this.sourcesFolder}/${mediaType}`;
 
 		const filePath = `${targetFolder}/${filename}`;
+		console.log('📄 Target file path:', filePath);
 
 		// Ensure directory exists
 		await this.ensureDirectoryExists(targetFolder);
 
+		// Log template decision
+		console.log('📝 Template decision check:', {
+			hasTemplate: !!this.template,
+			templateLength: this.template?.length || 0,
+			templatePreview: this.template?.substring(0, 50),
+			hasFieldMappings: !!this.fieldMappings,
+			willUseTemplate: (this.template && this.template.trim() && this.fieldMappings)
+		});
+
 		// Use template if available, otherwise fall back to default markdown generation
-		const content = this.template && this.fieldMappings
+		const content = (this.template && this.template.trim() && this.fieldMappings)
 			? this.generateSourceFromTemplate({ ...sourceData, citekey })
 			: this.generateSourceMarkdown({ ...sourceData, citekey });
+
+		console.log('✅ Content generated, length:', content.length);
+		console.log('📄 Content preview (first 200 chars):', content.substring(0, 200));
 
 		// Create file in vault
 		const newFile = await this.app.vault.create(filePath, content);
@@ -594,26 +613,41 @@ ${source.abstract || "<!-- Add abstract here -->"}
 	}
 
 	private generateSourceFromTemplate(source: any): string {
+		console.log('🚀 DEBUG: generateSourceFromTemplate called');
+		console.log('📋 Source data:', JSON.stringify(source, null, 2));
+
 		// Create template data object using field mappings
 		const templateData: Record<string, any> = {};
+		console.log('🔧 Field mappings available:', !!this.fieldMappings);
+		console.log('📄 Raw template content:', JSON.stringify(this.template, null, 2));
 
 		if (this.fieldMappings) {
 			// Map template placeholders to actual source data using field mappings
+			console.log('🔄 Processing field mappings...');
 			Object.entries(this.fieldMappings).forEach(([placeholder, frontmatterField]) => {
 				const value = source[frontmatterField];
+				console.log(`📝 Processing "${placeholder}" -> "${frontmatterField}":`, JSON.stringify(value, null, 2));
 
 				if (value !== undefined && value !== null) {
 					// Handle special formatting for certain field types
-					if (Array.isArray(value)) {
+					if (placeholder === 'atcitekey') {
+						// Special handling for atcitekey - prepend @ symbol
+						templateData[placeholder] = `@${value}`;
+						console.log(`✅ Special handling for atcitekey: "${templateData[placeholder]}"`);
+					} else if (Array.isArray(value)) {
 						// For arrays, keep them as arrays for Mustache to iterate
 						templateData[placeholder] = value;
+						console.log(`✅ Array set for "${placeholder}":`, templateData[placeholder]);
 					} else if (typeof value === 'string') {
 						templateData[placeholder] = value;
+						console.log(`✅ String set for "${placeholder}": "${templateData[placeholder]}"`);
 					} else {
 						templateData[placeholder] = String(value);
+						console.log(`✅ Converted to string for "${placeholder}": "${templateData[placeholder]}"`);
 					}
 				} else {
 					templateData[placeholder] = '';
+					console.log(`⚠️ Empty value set for "${placeholder}"`);
 				}
 			});
 		}
@@ -622,12 +656,35 @@ ${source.abstract || "<!-- Add abstract here -->"}
 		templateData.authorList = Array.isArray(source.author)
 			? source.author.join(', ')
 			: source.author || '';
+		console.log('📚 Author list helper:', templateData.authorList);
+
+		console.log('📊 Final template data:', JSON.stringify(templateData, null, 2));
 
 		// Render the template
 		try {
-			return Mustache.render(this.template || '', templateData);
+			const templateToRender = this.template || '';
+			console.log('🎨 Template to render (first 200 chars):', templateToRender.substring(0, 200));
+			console.log('📏 Template length:', templateToRender.length);
+
+			if (!templateToRender.trim()) {
+				console.warn('⚠️ Template is empty, falling back to default markdown generation');
+				return this.generateSourceMarkdown(source);
+			}
+
+			console.log('🔥 About to call Mustache.render()...');
+			const result = Mustache.render(templateToRender, templateData);
+			console.log('✅ Mustache.render() successful!');
+			console.log('📄 Rendered result (first 200 chars):', result.substring(0, 200));
+			return result;
 		} catch (error) {
-			console.error('Error rendering template:', error);
+			console.error('💥 ERROR rendering template:', error);
+			console.error('💥 Error details:', {
+				message: error.message,
+				stack: error.stack,
+				templateLength: this.template?.length || 0,
+				templateStart: this.template?.substring(0, 100) || '',
+				templateDataKeys: Object.keys(templateData)
+			});
 			// Fallback to basic content
 			return this.generateSourceMarkdown(source);
 		}
