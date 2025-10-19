@@ -2,11 +2,50 @@ import { App, TFile, Notice, normalizePath, Modal } from "obsidian";
 import BibliographyManagerPlugin from "../main";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite } from "@citation-js/core";
+import { Cite, util } from "@citation-js/core";
 import "@citation-js/plugin-doi";
 import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
 import "@citation-js/plugin-wikidata";
+
+// Set User-Agent for Crossref API if email is provided
+export function setCrossrefUserAgent(email: string, showNotifications: boolean = true) {
+    if (email) {
+        try {
+            // Try to get version - works in both Node.js and browser
+            let version = "unknown";
+            try {
+                if (typeof require !== 'undefined') {
+                    version = require("@citation-js/core").version;
+                } else if (typeof window !== 'undefined') {
+                    // Browser environment - try to get version from global
+                    version = (window as any).citationjs?.version || "unknown";
+                }
+            } catch (e) {
+                console.warn("Could not get citation-js version:", e);
+            }
+
+            // Set User-Agent - util should be available from @citation-js/core
+            const userAgent = `Bibliography-Manager-Obsidian-Plugin (mailto:${email}) Citation.js/${version}`;
+            if (typeof util !== 'undefined') {
+                util.setUserAgent(userAgent);
+                console.log("User-Agent set:", userAgent);
+            } else {
+                console.warn("citation-js util not available, User-Agent not set");
+            }
+        } catch (error) {
+            console.error("Failed to set User-Agent:", error);
+        }
+    } else if (showNotifications) {
+        // Show notification that no email is provided
+        if (typeof window !== 'undefined' && (window as any).app) {
+            // Obsidian environment
+            const { Notice } = require("obsidian");
+            new Notice("No Crossref email provided. DOI lookups may have lower rate limits. Add your email in plugin settings for better performance.", 8000);
+        }
+        console.warn("No Crossref email provided. Add your email in plugin settings for better API rate limits.");
+    }
+}
 
 // Browser-compatible citation-js with plugins
 
@@ -206,8 +245,8 @@ export class SourceImportModal extends Modal {
 			// Clean DOI input
 			const cleanDOI = doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
 
-			const cite = new Cite(cleanDOI);
-			const data = await cite.format("data", { format: "object" });
+			const citation = await Cite.async(cleanDOI);
+			const data = citation.data;
 
 			if (!data || data.length === 0) {
 				throw new Error("No data found for this DOI");
@@ -224,8 +263,8 @@ export class SourceImportModal extends Modal {
 			// Clean ISBN input
 			const cleanISBN = isbn.replace(/[-\s]/g, "");
 
-			const cite = new Cite(cleanISBN);
-			const data = await cite.format("data", { format: "object" });
+			const citation = await Cite.async(cleanISBN);
+			const data = citation.data;
 
 			if (!data || data.length === 0) {
 				throw new Error("No data found for this ISBN");
@@ -239,8 +278,8 @@ export class SourceImportModal extends Modal {
 
 	private async importFromURL(url: string): Promise<SourceData | null> {
 		try {
-			const cite = new Cite(url);
-			const data = await cite.format("data", { format: "object" });
+			const citation = await Cite.async(url);
+			const data = citation.data;
 
 			if (!data || data.length === 0) {
 				// Fallback to basic website data
@@ -256,8 +295,8 @@ export class SourceImportModal extends Modal {
 
 	private async importFromBibTeX(bibtex: string): Promise<SourceData | null> {
 		try {
-			const cite = new Cite(bibtex);
-			const data = await cite.format("data", { format: "object" });
+			const citation = await Cite.async(bibtex);
+			const data = citation.data;
 
 			if (!data || data.length === 0) {
 				throw new Error("Invalid BibTeX format");

@@ -1,12 +1,13 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(npm run build:*)",
-      "Bash(task:*)",
-      "Bash(npm test)",
-      "Bash(node:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
+	"permissions": {
+		"allow": [
+			"Bash(npm run build:*)",
+			"Bash(task:*)",
+			"Bash(npm test)",
+			"Bash(node:*)"
+		],
+		"deny": [],
+		"ask": []
+	},
+	"enableAllProjectMcpServers": true
 }

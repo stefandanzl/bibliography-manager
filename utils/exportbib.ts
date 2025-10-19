@@ -458,13 +458,16 @@ export class CitekeyGenerator {
 				yearSuffix
 			);
 		} else {
-			// Multiple authors: first 2 letters of first 2 authors + year
+			// Multiple authors: first 2 letters of first 2 authors + year (capitalized)
 			const firstAuthor = this.extractLastName(authors[0]);
 			const secondAuthor = this.extractLastName(authors[1]);
-			const base = (
-				firstAuthor.substring(0, 2) + secondAuthor.substring(0, 2)
-			).toLowerCase();
-			return base + yearSuffix;
+			const firstInitial = firstAuthor.substring(0, 2);
+			const secondInitial = secondAuthor.substring(0, 2);
+			const capitalizedBase = (
+				firstInitial.charAt(0).toUpperCase() + firstInitial.substring(1).toLowerCase() +
+				secondInitial.charAt(0).toUpperCase() + secondInitial.substring(1).toLowerCase()
+			);
+			return capitalizedBase + yearSuffix;
 		}
 	}
 

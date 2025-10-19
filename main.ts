@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
 import { SourceService } from "./utils/sourceService";
-import { SourceData } from "./utils/sourceManager";
+import { SourceData, setCrossrefUserAgent } from "./utils/sourceManager";
 import { getBibliographyCommands } from "./utils/bibliographyCommands";
 
 // Plugin settings interface
@@ -10,7 +10,8 @@ export interface BibliographySettings {
 	bibliographyFilename: string;
 	autoGenerate: boolean;
 	supportedFileTypes: string[];
-}
+	crossrefEmail: string;
+	}
 
 // Default settings
 const DEFAULT_SETTINGS: BibliographySettings = {
@@ -18,7 +19,8 @@ const DEFAULT_SETTINGS: BibliographySettings = {
 	bibliographyFilename: "bibliography.bib",
 	autoGenerate: false,
 	supportedFileTypes: ["pdf", "epub", "txt"],
-};
+	crossrefEmail: "",
+	};
 
 // API interface that other plugins can use
 export interface BibliographyAPI {
@@ -66,6 +68,9 @@ export default class BibliographyManagerPlugin extends Plugin {
 		try {
 			// Load settings with error handling
 			await this.loadSettings();
+
+			// Set User-Agent for Crossref API if email is provided
+			setCrossrefUserAgent(this.settings.crossrefEmail, false);
 
 			// Initialize services with error handling
 			this.sourceService = new SourceService(this.app);
@@ -120,6 +125,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		// Update User-Agent for Crossref API if email changed
+		setCrossrefUserAgent(this.settings.crossrefEmail, true);
 		// Update services with new settings
 		this.bibliographyExporter = new BibliographyExporter(
 			this.app,
@@ -291,7 +298,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 	}
 
 	private registerCommands() {
-		const commands = getBibliographyCommands(this.app);
+		// NOTE: Integration tests - change 'false' to 'true' to enable testing commands
+		const commands = getBibliographyCommands(this.app, false);
 
 		commands.forEach((command) => {
 			this.addCommand(command);
@@ -419,6 +427,21 @@ class BibliographySettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.autoGenerate)
 					.onChange(async (value) => {
 						this.plugin.settings.autoGenerate = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		containerEl.createEl("h3", { text: "DOI Import Settings" });
+
+		new Setting(containerEl)
+			.setName("Crossref Email")
+			.setDesc("Email for Crossref API 'polite' access (optional but recommended for higher rate limits)")
+			.addText((text) =>
+				text
+					.setPlaceholder("your-email@example.com")
+					.setValue(this.plugin.settings.crossrefEmail)
+					.onChange(async (value) => {
+						this.plugin.settings.crossrefEmail = value;
 						await this.plugin.saveSettings();
 					})
 			);
