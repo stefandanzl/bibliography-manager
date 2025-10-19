@@ -14,7 +14,7 @@ import {
 	testDOIFormats,
 	testDOIErrorHandling,
 	testDOIOutputFormats,
-	runAllDOITests
+	runAllDOITests,
 } from "../tests/integration/doi-tests";
 import { DOITestModal } from "../tests/integration/test-modal";
 
@@ -254,122 +254,7 @@ export class SourceImportModal extends Modal {
 
 		// Event handlers
 		urlButton.onclick = () => this.showUrlImport(contentArea);
-		// doiButton.onclick = () => this.showDoiImport(contentArea);
-		doiButton.onclick = async () => {
-			console.log("=== DOI Plugin Diagnostic ===");
-
-			try {
-				// Test 1: Basic imports
-				console.log("1. Testing basic functionality...");
-				const { Cite } = require("@citation-js/core");
-				console.log("✓ Core imported");
-
-				// Test 2: Plugin imports
-				console.log("2. Testing plugin imports...");
-				require("@citation-js/plugin-doi");
-				console.log("✓ DOI plugin imported");
-
-				// Test 3: Simple citation
-				console.log("3. Testing simple citation...");
-				const simpleCite = new Cite({title: "Test", author: [{family: "Smith"}]});
-				const simpleData = simpleCite.data;
-				console.log("✓ Simple citation works:", simpleData);
-
-				// Test 4: DOI citation
-				console.log("4. Testing DOI citation...");
-				const testDOI = "10.1000/182"; // Wikipedia DOI - reliable for testing
-				const doiCite = new Cite(testDOI);
-				console.log("✓ DOI Cite object created");
-
-				// Test 5: Different format methods
-				console.log("5. Testing format methods...");
-
-				try {
-					const bibOutput = await doiCite.format("bibtex");
-					console.log("✓ BibTeX format works, length:", bibOutput.length);
-				} catch (e) {
-					console.error("✗ BibTeX format failed:", e);
-				}
-
-				try {
-					// Try multiple approaches to get data
-					console.log("5a. Testing data format approaches...");
-
-					// Method 1: format with object
-					try {
-						const dataOutput = await doiCite.format("data", { format: "object" });
-						console.log("✓ Data format (object) works, entries:", dataOutput?.length);
-						if (dataOutput?.[0]) {
-							console.log("Sample title:", dataOutput[0].title);
-						}
-					} catch (e1) {
-						console.error("✗ Data format (object) failed:", e1);
-					}
-
-					// Method 2: format without options (default)
-					try {
-						const defaultOutput = await doiCite.format("data");
-						console.log("✓ Data format (default) works");
-						console.log("Default output type:", typeof defaultOutput);
-					} catch (e2) {
-						console.error("✗ Data format (default) failed:", e2);
-					}
-
-					// Method 3: Direct synchronous access
-					try {
-						console.log("5b. Testing direct data access...");
-						console.log("Direct .data access:", doiCite.data);
-						console.log("Data length:", doiCite.data?.length);
-						if (doiCite.data?.[0]) {
-							console.log("Direct access title:", doiCite.data[0].title);
-						}
-					} catch (e3) {
-						console.error("✗ Direct data access failed:", e3);
-					}
-				} catch (e) {
-					console.error("✗ All data format methods failed:", e);
-				}
-
-				// Test 6: Check if data is accessible
-				console.log("6. Testing internal data access...");
-				console.log("Internal data array:", doiCite.data);
-				console.log("Data length:", doiCite.data?.length);
-
-				// Test 7: Try async operations
-				console.log("7. Testing async operations...");
-				try {
-					await doiCite.addAsync(testDOI);
-					console.log("✓ Async add works");
-				} catch (e) {
-					console.error("✗ Async add failed:", e);
-				}
-
-				new Notice("✅ DOI plugin diagnostic complete! Check console for detailed results.");
-
-			} catch (error) {
-				console.error("❌ Diagnostic failed:", error);
-
-				// Show detailed error analysis
-				if (error.message.includes("JSON")) {
-					console.error("🚨 JSON parsing error - plugin misconfigured");
-					new Notice("❌ Plugin configuration error - JSON parsing failed");
-				} else if (error.message.includes("fetch")) {
-					console.error("🚨 Network error - CORS or API issue");
-					new Notice("❌ Network error - check CORS/API access");
-				} else if (error.message.includes("Unexpected non-whitespace")) {
-					console.error("🚨 JSON format error - API returned malformed data");
-					new Notice("❌ API response format error - malformed JSON");
-				} else {
-					console.error("🚨 Unknown error type");
-					console.error("Error details:", {
-						name: error.name,
-						message: error.message,
-						stack: error.stack?.split('\n')?.[0] // First line of stack trace
-					});
-					new Notice(`❌ Unknown error: ${error.message}`);
-				}
-			}
-		};
+		doiButton.onclick = () => this.showDoiImport(contentArea);
 
 		isbnButton.onclick = () => this.showIsbnImport(contentArea);
 		bibtexButton.onclick = () => this.showBibtexImport(contentArea);
@@ -530,7 +415,7 @@ export class SourceImportModal extends Modal {
 
 			new Notice("Fetching metadata from URL...");
 
-			const cite = new Cite(this.sourceData.url);
+			const cite = await Cite.async(this.sourceData.url);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -601,7 +486,7 @@ export class SourceImportModal extends Modal {
 				""
 			);
 
-			const cite = new Cite(cleanDOI);
+			const cite = await Cite.async(cleanDOI);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -670,7 +555,7 @@ export class SourceImportModal extends Modal {
 
 			new Notice("Parsing BibTeX...");
 
-			const cite = new Cite(this.sourceData.bibtex);
+			const cite = await Cite.async(this.sourceData.bibtex);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -744,7 +629,7 @@ export class SourceImportModal extends Modal {
 			// Clean ISBN input
 			const cleanISBN = this.sourceData.isbn.replace(/[-\s]/g, "");
 
-			const cite = new Cite(cleanISBN);
+			const cite = await Cite.async(cleanISBN);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -894,267 +779,293 @@ export class SourceImportModal extends Modal {
 
 // DOI Plugin Format Showcase
 export async function testDOIPluginFormats(app: App) {
-    const { Notice } = require("obsidian");
+	const { Notice } = require("obsidian");
 
-    try {
-        new Notice("Testing DOI plugin output formats...");
+	try {
+		new Notice("Testing DOI plugin output formats...");
 
-        // Test DOI
-        const testDOI = "10.1038/nature12373";
-        const cite = new Cite(testDOI);
+		// Test DOI
+		const testDOI = "10.1038/nature12373";
+		const cite = await Cite.async(testDOI);
 
-        // Get basic data first using the correct format: 'object' approach
-        const data = await cite.format("data", { format: "object" });
+		// Get basic data first using the correct format: 'object' approach
+		const data = await cite.format("data", { format: "object" });
 
-        // Comprehensive format testing with proper typing
-        const formatResults: Record<string, {
-            description: string;
-            success: boolean;
-            result?: any;
-            error?: string;
-        }> = {};
+		// Comprehensive format testing with proper typing
+		const formatResults: Record<
+			string,
+			{
+				description: string;
+				success: boolean;
+				result?: any;
+				error?: string;
+			}
+		> = {};
 
-        // All available output formats from citation.js
-        const formats = [
-            { name: 'bibtex', description: 'BibTeX format for LaTeX' },
-            { name: 'json', description: 'JSON format' },
-            { name: 'html', description: 'HTML format for web display' },
-            { name: 'text', description: 'Plain text citation' },
-            { name: 'ris', description: 'RIS format for reference managers' },
-            { name: 'ndjson', description: 'Newline delimited JSON' },
-            { name: 'cite', description: 'Simple citation format' },
-            { name: 'citation', description: 'Full citation format' },
-            { name: 'csl', description: 'CSL-JSON format' },
-            { name: 'bibliography', description: 'Bibliography format' }
-        ];
+		// All available output formats from citation.js
+		const formats = [
+			{ name: "bibtex", description: "BibTeX format for LaTeX" },
+			{ name: "json", description: "JSON format" },
+			{ name: "html", description: "HTML format for web display" },
+			{ name: "text", description: "Plain text citation" },
+			{ name: "ris", description: "RIS format for reference managers" },
+			{ name: "ndjson", description: "Newline delimited JSON" },
+			{ name: "cite", description: "Simple citation format" },
+			{ name: "citation", description: "Full citation format" },
+			{ name: "csl", description: "CSL-JSON format" },
+			{ name: "bibliography", description: "Bibliography format" },
+		];
 
-        // Test each format using the correct API
-        for (const format of formats) {
-            try {
-                const result = await cite.format(format.name);
-                formatResults[format.name] = {
-                    description: format.description,
-                    success: true,
-                    result: result
-                };
-            } catch (error: any) {
-                formatResults[format.name] = {
-                    description: format.description,
-                    success: false,
-                    error: error.message
-                };
-            }
-        }
+		// Test each format using the correct API
+		for (const format of formats) {
+			try {
+				const result = await cite.format(format.name);
+				formatResults[format.name] = {
+					description: format.description,
+					success: true,
+					result: result,
+				};
+			} catch (error: any) {
+				formatResults[format.name] = {
+					description: format.description,
+					success: false,
+					error: error.message,
+				};
+			}
+		}
 
-        // Test formats with options using the correct API
-        const formatsWithOptions: Record<string, any> = {};
+		// Test formats with options using the correct API
+		const formatsWithOptions: Record<string, any> = {};
 
-        // BibTeX with different styles using proper options
-        try {
-            formatsWithOptions['bibtex_apa'] = await cite.format('bibtex', {
-                format: 'string',
-                type: 'html',
-                style: 'apa'
-            });
-        } catch (e: any) {
-            formatsWithOptions['bibtex_apa'] = `Error: ${e.message}`;
-        }
+		// BibTeX with different styles using proper options
+		try {
+			formatsWithOptions["bibtex_apa"] = await cite.format("bibtex", {
+				format: "string",
+				type: "html",
+				style: "apa",
+			});
+		} catch (e: any) {
+			formatsWithOptions["bibtex_apa"] = `Error: ${e.message}`;
+		}
 
-        try {
-            formatsWithOptions['bibtex_mla'] = await cite.format('bibtex', {
-                format: 'string',
-                type: 'html',
-                style: 'mla'
-            });
-        } catch (e: any) {
-            formatsWithOptions['bibtex_mla'] = `Error: ${e.message}`;
-        }
+		try {
+			formatsWithOptions["bibtex_mla"] = await cite.format("bibtex", {
+				format: "string",
+				type: "html",
+				style: "mla",
+			});
+		} catch (e: any) {
+			formatsWithOptions["bibtex_mla"] = `Error: ${e.message}`;
+		}
 
-        // HTML with different styles
-        try {
-            formatsWithOptions['html_apa'] = await cite.format('html', {
-                style: 'apa',
-                lang: 'en-US'
-            });
-        } catch (e: any) {
-            formatsWithOptions['html_apa'] = `Error: ${e.message}`;
-        }
+		// HTML with different styles
+		try {
+			formatsWithOptions["html_apa"] = await cite.format("html", {
+				style: "apa",
+				lang: "en-US",
+			});
+		} catch (e: any) {
+			formatsWithOptions["html_apa"] = `Error: ${e.message}`;
+		}
 
-        try {
-            formatsWithOptions['html_mla'] = await cite.format('html', {
-                style: 'mla',
-                lang: 'en-US'
-            });
-        } catch (e: any) {
-            formatsWithOptions['html_mla'] = `Error: ${e.message}`;
-        }
+		try {
+			formatsWithOptions["html_mla"] = await cite.format("html", {
+				style: "mla",
+				lang: "en-US",
+			});
+		} catch (e: any) {
+			formatsWithOptions["html_mla"] = `Error: ${e.message}`;
+		}
 
-        // Create results modal
-        const modal = new Modal(app);
-        modal.titleEl.setText("DOI Plugin - Output Format Showcase");
+		// Create results modal
+		const modal = new Modal(app);
+		modal.titleEl.setText("DOI Plugin - Output Format Showcase");
 
-        const content = modal.contentEl.createDiv();
+		const content = modal.contentEl.createDiv();
 
-        // Introduction
-        content.createEl("p", {
-            text: `Testing DOI: ${testDOI}`,
-            cls: "doi-info"
-        });
+		// Introduction
+		content.createEl("p", {
+			text: `Testing DOI: ${testDOI}`,
+			cls: "doi-info",
+		});
 
-        // Basic data access section
-        content.createEl("h3", { text: "1. Basic Data Access (CSL-JSON)" });
-        content.createEl("p", { text: "This is the fundamental data format used for processing:" });
-        content.createEl("pre", {
-            text: JSON.stringify(data, null, 2),
-            cls: "code-block"
-        });
+		// Basic data access section
+		content.createEl("h3", { text: "1. Basic Data Access (CSL-JSON)" });
+		content.createEl("p", {
+			text: "This is the fundamental data format used for processing:",
+		});
+		content.createEl("pre", {
+			text: JSON.stringify(data, null, 2),
+			cls: "code-block",
+		});
 
-        // Format results section
-        content.createEl("h3", { text: "2. Available Output Formats" });
+		// Format results section
+		content.createEl("h3", { text: "2. Available Output Formats" });
 
-        const formatContainer = content.createDiv({ cls: "format-grid" });
+		const formatContainer = content.createDiv({ cls: "format-grid" });
 
-        for (const [formatName, result] of Object.entries(formatResults)) {
-            const formatDiv = formatContainer.createDiv({ cls: "format-item" });
+		for (const [formatName, result] of Object.entries(formatResults)) {
+			const formatDiv = formatContainer.createDiv({ cls: "format-item" });
 
-            formatDiv.createEl("h4", {
-                text: formatName.toUpperCase(),
-                cls: result.success ? "format-success" : "format-error"
-            });
+			formatDiv.createEl("h4", {
+				text: formatName.toUpperCase(),
+				cls: result.success ? "format-success" : "format-error",
+			});
 
-            formatDiv.createEl("p", {
-                text: result.description,
-                cls: "format-description"
-            });
+			formatDiv.createEl("p", {
+				text: result.description,
+				cls: "format-description",
+			});
 
-            if (result.success) {
-                const previewDiv = formatDiv.createDiv({ cls: "format-preview" });
-                previewDiv.createEl("pre", {
-                    text: typeof result.result === 'string' ?
-                        (result.result.length > 200 ? result.result.substring(0, 200) + "..." : result.result) :
-                        JSON.stringify(result.result, null, 2).substring(0, 200) + "...",
-                    cls: "preview-code"
-                });
+			if (result.success) {
+				const previewDiv = formatDiv.createDiv({
+					cls: "format-preview",
+				});
+				previewDiv.createEl("pre", {
+					text:
+						typeof result.result === "string"
+							? result.result.length > 200
+								? result.result.substring(0, 200) + "..."
+								: result.result
+							: JSON.stringify(result.result, null, 2).substring(
+									0,
+									200
+							  ) + "...",
+					cls: "preview-code",
+				});
 
-                if (typeof result.result === 'string' && result.result.length > 200) {
-                    previewDiv.createEl("p", {
-                        text: `(${result.result.length} characters total)`,
-                        cls: "preview-info"
-                    });
-                }
-            } else {
-                formatDiv.createEl("p", {
-                    text: `❌ Error: ${result.error}`,
-                    cls: "error-message"
-                });
-            }
-        }
+				if (
+					typeof result.result === "string" &&
+					result.result.length > 200
+				) {
+					previewDiv.createEl("p", {
+						text: `(${result.result.length} characters total)`,
+						cls: "preview-info",
+					});
+				}
+			} else {
+				formatDiv.createEl("p", {
+					text: `❌ Error: ${result.error}`,
+					cls: "error-message",
+				});
+			}
+		}
 
-        // Formats with options section
-        content.createEl("h3", { text: "3. Formats with Options" });
+		// Formats with options section
+		content.createEl("h3", { text: "3. Formats with Options" });
 
-        for (const [optionName, result] of Object.entries(formatsWithOptions)) {
-            const optionDiv = content.createDiv({ cls: "option-item" });
-            optionDiv.createEl("h4", { text: optionName.replace('_', ' ').toUpperCase() });
+		for (const [optionName, result] of Object.entries(formatsWithOptions)) {
+			const optionDiv = content.createDiv({ cls: "option-item" });
+			optionDiv.createEl("h4", {
+				text: optionName.replace("_", " ").toUpperCase(),
+			});
 
-            if (typeof result === 'string' && result.startsWith('Error:')) {
-                optionDiv.createEl("p", {
-                    text: result,
-                    cls: "error-message"
-                });
-            } else {
-                optionDiv.createEl("pre", {
-                    text: result,
-                    cls: "option-code"
-                });
-            }
-        }
+			if (typeof result === "string" && result.startsWith("Error:")) {
+				optionDiv.createEl("p", {
+					text: result,
+					cls: "error-message",
+				});
+			} else {
+				optionDiv.createEl("pre", {
+					text: result,
+					cls: "option-code",
+				});
+			}
+		}
 
-        // Usage examples
-        content.createEl("h3", { text: "4. Usage Examples" });
-        content.createEl("p", { text: "Here's how to use different output formats:" });
+		// Usage examples
+		content.createEl("h3", { text: "4. Usage Examples" });
+		content.createEl("p", {
+			text: "Here's how to use different output formats:",
+		});
 
-        const examples = [
-            {
-                title: "Get structured data for processing:",
-                code: `const cite = new Cite("10.1038/nature12373");
-const data = await cite.format("data", { format: "object" });`
-            },
-            {
-                title: "Generate BibTeX for LaTeX:",
-                code: `const bibtex = await cite.format("bibtex");`
-            },
-            {
-                title: "Generate HTML with APA style:",
-                code: `const html = await cite.format("html", { style: "apa" });`
-            },
-            {
-                title: "Get plain text citation:",
-                code: `const text = await cite.format("text");`
-            },
-            {
-                title: "Export to RIS format:",
-                code: `const ris = await cite.format("ris");`
-            }
-        ];
+		const examples = [
+			{
+				title: "Get structured data for processing:",
+				code: `const cite = new Cite("10.1038/nature12373");
+const data = await cite.format("data", { format: "object" });`,
+			},
+			{
+				title: "Generate BibTeX for LaTeX:",
+				code: `const bibtex = await cite.format("bibtex");`,
+			},
+			{
+				title: "Generate HTML with APA style:",
+				code: `const html = await cite.format("html", { style: "apa" });`,
+			},
+			{
+				title: "Get plain text citation:",
+				code: `const text = await cite.format("text");`,
+			},
+			{
+				title: "Export to RIS format:",
+				code: `const ris = await cite.format("ris");`,
+			},
+		];
 
-        // Format API explanation
-        content.createEl("h3", { text: "5. Citation.js Format API" });
-        content.createEl("p", { text: "The citation.js formatter follows this signature:" });
-        content.createEl("pre", {
-            text: `formatter(csl[] data, ...options) {}
+		// Format API explanation
+		content.createEl("h3", { text: "5. Citation.js Format API" });
+		content.createEl("p", {
+			text: "The citation.js formatter follows this signature:",
+		});
+		content.createEl("pre", {
+			text: `formatter(csl[] data, ...options) {}
 
 // First argument: Array of CSL-JSON data
 // Additional arguments: Configuration options
 // Example with multiple options:
 cite.format('html', { style: 'apa' }, { lang: 'en-US' })`,
-            cls: "api-explanation"
-        });
+			cls: "api-explanation",
+		});
 
-        content.createEl("p", { text: "Key points about the API:" });
-        const apiPoints = [
-            "• Takes CSL-JSON array as first argument",
-            "• Accepts multiple option objects",
-            "• Common options: format, type, style, lang, entry",
-            "• Returns formatted string or structured data"
-        ];
+		content.createEl("p", { text: "Key points about the API:" });
+		const apiPoints = [
+			"• Takes CSL-JSON array as first argument",
+			"• Accepts multiple option objects",
+			"• Common options: format, type, style, lang, entry",
+			"• Returns formatted string or structured data",
+		];
 
-        const apiPointsContainer = content.createDiv({ cls: "api-points" });
-        apiPoints.forEach(point => {
-            apiPointsContainer.createEl("p", { text: point });
-        });
+		const apiPointsContainer = content.createDiv({ cls: "api-points" });
+		apiPoints.forEach((point) => {
+			apiPointsContainer.createEl("p", { text: point });
+		});
 
-        const exampleContainer = content.createDiv({ cls: "examples" });
-        examples.forEach(example => {
-            const exampleDiv = exampleContainer.createDiv({ cls: "example-item" });
-            exampleDiv.createEl("h4", { text: example.title });
-            exampleDiv.createEl("pre", {
-                text: example.code,
-                cls: "example-code"
-            });
-        });
+		const exampleContainer = content.createDiv({ cls: "examples" });
+		examples.forEach((example) => {
+			const exampleDiv = exampleContainer.createDiv({
+				cls: "example-item",
+			});
+			exampleDiv.createEl("h4", { text: example.title });
+			exampleDiv.createEl("pre", {
+				text: example.code,
+				cls: "example-code",
+			});
+		});
 
-        // Alternative to format: "object"
-        content.createEl("h3", { text: "5. Alternative Methods" });
-        content.createEl("p", { text: "Instead of format: 'object', you can also use:" });
+		// Alternative to format: "object"
+		content.createEl("h3", { text: "5. Alternative Methods" });
+		content.createEl("p", {
+			text: "Instead of format: 'object', you can also use:",
+		});
 
-        const alternatives = [
-            "Direct data access: cite.data",
-            "Default format: await cite.format('data')",
-            "Async format: await cite.formatAsync('data', { format: 'object' })"
-        ];
+		const alternatives = [
+			"Direct data access: cite.data",
+			"Default format: await cite.format('data')",
+			"Async format: await cite.formatAsync('data', { format: 'object' })",
+		];
 
-        const altContainer = content.createDiv({ cls: "alternatives" });
-        alternatives.forEach(alt => {
-            altContainer.createEl("pre", {
-                text: alt,
-                cls: "alt-code"
-            });
-        });
+		const altContainer = content.createDiv({ cls: "alternatives" });
+		alternatives.forEach((alt) => {
+			altContainer.createEl("pre", {
+				text: alt,
+				cls: "alt-code",
+			});
+		});
 
-        // Add CSS styling
-        const style = document.createElement('style');
-        style.textContent = `
+		// Add CSS styling
+		const style = document.createElement("style");
+		style.textContent = `
             .doi-info {
                 background: var(--background-secondary-alt);
                 padding: 10px;
@@ -1259,25 +1170,27 @@ cite.format('html', { style: 'apa' }, { lang: 'en-US' })`,
                 font-family: monospace;
             }
         `;
-        modal.containerEl.appendChild(style);
+		modal.containerEl.appendChild(style);
 
-        // Success message
-        content.createEl("div", {
-            text: "✅ DOI plugin working perfectly! All output formats available.",
-            cls: "success-message"
-        });
+		// Success message
+		content.createEl("div", {
+			text: "✅ DOI plugin working perfectly! All output formats available.",
+			cls: "success-message",
+		});
 
-        modal.open();
-        new Notice("DOI plugin format test completed!");
-
-    } catch (error) {
-        console.error("DOI format test failed:", error);
-        new Notice(`Error: ${error.message}`);
-    }
+		modal.open();
+		new Notice("DOI plugin format test completed!");
+	} catch (error) {
+		console.error("DOI format test failed:", error);
+		new Notice(`Error: ${error.message}`);
+	}
 }
 
 // Command definitions - pass app instance
-export function getBibliographyCommands(app: App, includeTests: boolean = false) {
+export function getBibliographyCommands(
+	app: App,
+	includeTests: boolean = false
+) {
 	return [
 		{
 			id: "generate-citekey",
@@ -1315,7 +1228,7 @@ export function getBibliographyCommands(app: App, includeTests: boolean = false)
 				testDOIFormats(app);
 			},
 		},
-	{
+		{
 			id: "test-doi-error-handling",
 			name: "Test DOI error handling",
 			callback: () => {

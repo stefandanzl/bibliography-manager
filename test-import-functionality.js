@@ -17,7 +17,7 @@ async function testRealFunctionality() {
   console.log('🔍 Testing DOI Import...');
   try {
     const doi = '10.1038/nature12373';
-    const cite = new Cite(doi);
+    const cite = await Cite.async(doi);
     const data = await cite.format("data", { format: "object" });
 
     if (data && data.length > 0) {
@@ -39,7 +39,7 @@ async function testRealFunctionality() {
   try {
     const isbn = '978-0262033848';
     const cleanISBN = isbn.replace(/[-\s]/g, "");
-    const cite = new Cite(cleanISBN);
+    const cite = await Cite.async(cleanISBN);
     const data = await cite.format("data", { format: "object" });
 
     if (data && data.length > 0) {
@@ -70,7 +70,7 @@ async function testRealFunctionality() {
       publisher={Wiley Online Library}
     }`;
 
-    const cite = new Cite(bibtex);
+    const cite = await Cite.async(bibtex);
     const data = await cite.format("data", { format: "object" });
 
     if (data && data.length > 0) {
@@ -91,7 +91,7 @@ async function testRealFunctionality() {
   console.log('\n🔗 Testing URL Import...');
   try {
     const url = 'https://doi.org/10.1038/nature12373';
-    const cite = new Cite(url);
+    const cite = await Cite.async(url);
     const data = await cite.format("data", { format: "object" });
 
     if (data && data.length > 0) {
