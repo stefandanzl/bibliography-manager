@@ -6,7 +6,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import * as Mustache from "mustache";
+// No Handlebars import - we'll use simple regex replacement
 import type { BibliographySettings } from "../settings";
 
 // Initialize citation-js properly for browser environment
@@ -493,9 +493,23 @@ export class CitekeyGenerator {
 	}
 
 	static sanitizeFilename(title: string): string {
+		// Create a clean filename from title
 		return title
-			.replace(/[<>:"/\\|?*]/g, "") // Remove invalid filename characters
-			.replace(/\s+/g, " ") // Replace multiple spaces with single space
+			// Remove HTML/XML tags and entities
+			.replace(/<[^>]*>/g, "")
+			.replace(/&[^;]+;/g, "")
+			// Remove common LaTeX formatting
+			.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX commands like \textit{}
+			.replace(/[{}$]/g, "") // Remove remaining LaTeX braces and math symbols
+			// Replace common punctuation with hyphens or spaces
+			.replace(/[,:;]/g, " ")
+			.replace(/[—–]/g, "-") // Replace different types of dashes
+			// Remove invalid filename characters
+			.replace(/[<>:"/\\|?*]/g, "")
+			// Replace multiple spaces/hyphens with single ones
+			.replace(/[\s-]+/g, "-")
+			// Remove leading/trailing hyphens
+			.replace(/^-+|-+$/g, "")
 			.trim();
 	}
 }
@@ -635,9 +649,11 @@ ${source.abstract || "<!-- Add abstract here -->"}
 						templateData[placeholder] = `@${value}`;
 						console.log(`✅ Special handling for atcitekey: "${templateData[placeholder]}"`);
 					} else if (Array.isArray(value)) {
-						// For arrays, keep them as arrays for Mustache to iterate
-						templateData[placeholder] = value;
+						// For arrays, provide both array version (for YAML) and pre-formatted YAML array string
+						templateData[placeholder] = value;  // Keep as array for other uses
+						templateData[placeholder + 'Array'] = JSON.stringify(value);  // Pre-formatted YAML array
 						console.log(`✅ Array set for "${placeholder}":`, templateData[placeholder]);
+						console.log(`✅ Pre-formatted array for "${placeholder}Array":`, templateData[placeholder + 'Array']);
 					} else if (typeof value === 'string') {
 						templateData[placeholder] = value;
 						console.log(`✅ String set for "${placeholder}": "${templateData[placeholder]}"`);
@@ -646,8 +662,16 @@ ${source.abstract || "<!-- Add abstract here -->"}
 						console.log(`✅ Converted to string for "${placeholder}": "${templateData[placeholder]}"`);
 					}
 				} else {
-					templateData[placeholder] = '';
-					console.log(`⚠️ Empty value set for "${placeholder}"`);
+					// Set empty arrays for fields that should be arrays, empty strings for others
+					if (placeholder === 'author' || placeholder === 'keywords') {
+						templateData[placeholder] = [];  // Empty array for YAML
+						templateData[placeholder + 'Array'] = '[]';  // Empty YAML array string
+						console.log(`⚠️ Empty array set for "${placeholder}"`);
+						console.log(`⚠️ Empty array string for "${placeholder}Array"`);
+					} else {
+						templateData[placeholder] = '';
+						console.log(`⚠️ Empty value set for "${placeholder}"`);
+					}
 				}
 			});
 		}
@@ -657,6 +681,10 @@ ${source.abstract || "<!-- Add abstract here -->"}
 			? source.author.join(', ')
 			: source.author || '';
 		console.log('📚 Author list helper:', templateData.authorList);
+
+		// Add sanitized filename for use in templates
+		templateData.filename = CitekeyGenerator.sanitizeFilename(source.title);
+		console.log('📄 Sanitized filename:', templateData.filename);
 
 		console.log('📊 Final template data:', JSON.stringify(templateData, null, 2));
 
@@ -671,9 +699,20 @@ ${source.abstract || "<!-- Add abstract here -->"}
 				return this.generateSourceMarkdown(source);
 			}
 
-			console.log('🔥 About to call Mustache.render()...');
-			const result = Mustache.render(templateToRender, templateData);
-			console.log('✅ Mustache.render() successful!');
+			// Debug: Log all array-type fields that might cause issues
+			console.log('🔍 DEBUG ARRAY FIELDS BEFORE RENDER:');
+			Object.entries(templateData).forEach(([key, value]) => {
+				if (Array.isArray(value)) {
+					console.log(`  Array field "${key}":`, value);
+					console.log(`  Array "${key}" length:`, value.length);
+				} else if (key === 'keywords') {
+					console.log(`  Keywords field "${key}":`, value, `type:`, typeof value, `isArray:`, Array.isArray(value));
+				}
+			});
+
+			console.log('🔥 About to render template with regex replacement...');
+			const result = this.renderTemplateWithRegex(templateToRender, templateData);
+			console.log('✅ Template rendering successful!');
 			console.log('📄 Rendered result (first 200 chars):', result.substring(0, 200));
 			return result;
 		} catch (error) {
@@ -685,8 +724,35 @@ ${source.abstract || "<!-- Add abstract here -->"}
 				templateStart: this.template?.substring(0, 100) || '',
 				templateDataKeys: Object.keys(templateData)
 			});
-			// Fallback to basic content
+
+			// Fall back to default markdown generation
+			console.warn('⚠️ Falling back to default markdown generation due to template error');
 			return this.generateSourceMarkdown(source);
 		}
+	}
+
+	private renderTemplateWithRegex(template: string, data: Record<string, any>): string {
+		console.log('🔧 Starting regex template rendering...');
+
+		let result = template;
+
+		// Replace simple {{variable}} placeholders only
+		result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
+			const trimmedPath = fieldPath.trim();
+			console.log(`🔄 Processing simple variable: "${trimmedPath}"`);
+
+			// Handle nested paths like "data.field"
+			const value = this.getNestedValue(data, trimmedPath);
+			return value !== undefined && value !== null ? String(value) : '';
+		});
+
+		console.log('✅ Regex template rendering complete');
+		return result;
+	}
+
+	private getNestedValue(obj: any, path: string): any {
+		return path.split('.').reduce((current, key) => {
+			return current && current[key] !== undefined ? current[key] : undefined;
+		}, obj);
 	}
 }

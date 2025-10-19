@@ -30,34 +30,40 @@ export const DEFAULT_SETTINGS: BibliographySettings = {
 	sourceNoteTemplate: `---
 citekey: {{citekey}}
 title: "{{title}}"
-author: [{{#author}}{{.}}{{#unless @last}}, {{/unless}}{{/author}}]
-year: {{year}}
+author: {{authorArray}}
+keywords: {{keywordsArray}}
 bibtype: {{bibtype}}
 aliases: [{{atcitekey}}]
-{{#doi}}doi: {{doi}}{{/doi}}
-{{#isbn}}isbn: {{isbn}}{{/isbn}}
-{{#publisher}}publisher: {{publisher}}{{/isbn}}
-{{#journal}}journal: {{journal}}{{/journal}}
-{{#volume}}volume: {{volume}}{{/journal}}
-{{#number}}number: {{number}}{{/journal}}
-{{#pages}}pages: {{pages}}{{/journal}}
-{{#abstract}}abstract: {{abstract}}{{/doi}}
-{{#url}}url: {{url}}{{/url}}
-{{#downloadurl}}downloadurl: {{downloadurl}}{{/url}}
-{{#imageurl}}imageurl: {{imageurl}}{{/url}}
+filename: {{filename}}
+doi: {{doi}}
+isbn: {{isbn}}
+publisher: {{publisher}}
+journal: {{journal}}
+volume: {{volume}}
+number: {{number}}
+pages: {{pages}}
+abstract: {{abstract}}
+year: {{year}}
+url: {{url}}
+downloadurl: {{downloadurl}}
+imageurl: {{imageurl}}
 ---
 
 # {{title}}
 
-{{#author}}{{.}}{{#unless @last}}, {{/unless}}{{/author}} ({{year}})
+{{author}}
 
-{{#abstract}}
+({{year}})
+
 ## Abstract
 {{abstract}}
-{{/abstract}}
 
-{{#doi}}DOI: {{doi}}{{/doi}}
-{{#url}}URL: {{url}}{{/url}}
+**Keywords:** {{keywords}}
+
+**File:** [{{filename}}.pdf](./{{filename}}.pdf)
+
+DOI: {{doi}}
+URL: {{url}}
 `,
 	templateFile: "",
 	fieldMappings: {
@@ -65,6 +71,7 @@ aliases: [{{atcitekey}}]
 		atcitekey: "citekey",
 		title: "title",
 		author: "author",
+		keywords: "keywords",
 		year: "year",
 		bibtype: "bibtype",
 		doi: "doi",
