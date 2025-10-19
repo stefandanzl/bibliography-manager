@@ -1,5 +1,6 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
+import { BIB_FIELDS, DEFAULT_SETTINGS } from "settings";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";
@@ -309,18 +310,15 @@ export class SourceService {
 		const sourceFiles: TFile[] = [];
 
 		try {
-			console.log(`🔍 Searching for source files in: ${sourcesFolder}`);
-			const folder = this.app.vault.getAbstractFileByPath(sourcesFolder);
+					const folder = this.app.vault.getAbstractFileByPath(sourcesFolder);
 			if (!(folder instanceof TFolder)) {
 				console.warn(`⚠️ Sources folder not found or not a folder: ${sourcesFolder}`);
 				return sourceFiles;
 			}
 
-			console.log(`📁 Found sources folder, searching recursively...`);
-			// Recursively search for markdown files
+					// Recursively search for markdown files
 			await this.searchSourceFilesRecursive(folder, sourceFiles);
-			console.log(`✅ Found ${sourceFiles.length} source files with citekeys`);
-		} catch (error) {
+					} catch (error) {
 			console.error("Error finding source files:", error);
 		}
 
@@ -339,14 +337,12 @@ export class SourceService {
 				const cache = this.app.metadataCache.getFileCache(child);
 				const hasCitekey = cache?.frontmatter?.citekey;
 				if (hasCitekey) {
-					console.log(`📄 Found source: ${child.name} with citekey: ${cache.frontmatter?.citekey}`);
 					sourceFiles.push(child);
 				} else {
-					console.log(`📄 Skipping markdown file without citekey: ${child.name}`);
-				}
+					console.warn(`Source file without citekey: ${child.name}`);
+									}
 			} else if (child instanceof TFolder) {
-				console.log(`📂 Entering subfolder: ${child.name}`);
-				await this.searchSourceFilesRecursive(child, sourceFiles);
+								await this.searchSourceFilesRecursive(child, sourceFiles);
 			}
 		}
 	}
@@ -376,8 +372,7 @@ export class SourceService {
 				const citekey = frontmatter.citekey;
 
 				if (!citekey) {
-					console.warn(`Source file without citekey: ${file.path}`);
-					continue;
+										continue;
 				}
 
 				// Check for duplicates
@@ -420,10 +415,7 @@ export class SourceService {
 			);
 		}
 
-		console.log(
-			`DEBUG: SourceService BibTeX generation complete. Found ${duplicatesFound} duplicates, ${bibtexEntries.length} unique entries`
-		);
-
+		
 		return bibtexEntries.join("\n\n");
 	}
 
@@ -432,10 +424,11 @@ export class SourceService {
 	 */
 	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
 		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
-		const hayagrivaEntries: string[] = [];
+		const citeData: any[] = [];
 		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
 		let duplicatesFound = 0;
 
+		
 		for (const file of sourceFiles) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const frontmatter = cache?.frontmatter;
@@ -444,8 +437,7 @@ export class SourceService {
 				const citekey = frontmatter.citekey;
 
 				if (!citekey) {
-					console.warn(`Source file without citekey: ${file.path}`);
-					continue;
+										continue;
 				}
 
 				// Check for duplicates
@@ -460,9 +452,10 @@ export class SourceService {
 					// First occurrence of this citekey
 					seenCitekeys.set(citekey, { file, count: 1 });
 
-					const hayagrivaEntry = this.convertFrontmatterToHayagriva(frontmatter);
-					if (hayagrivaEntry) {
-						hayagrivaEntries.push(hayagrivaEntry);
+					// Convert frontmatter to citation-js format
+					const citationEntry = this.convertFrontmatterToCitationJS(frontmatter);
+					if (citationEntry) {
+						citeData.push(citationEntry);
 					}
 				}
 			}
@@ -477,7 +470,22 @@ export class SourceService {
 			);
 		}
 
-		return hayagrivaEntries.join("\n\n");
+		if (citeData.length === 0) {
+			console.warn("No valid source data found for Hayagriva generation");
+			return "";
+		}
+
+		try {
+			
+			// Use citation-js to format as Hayagriva
+			const cite = new Cite(citeData);
+			const output = cite.format('hayagriva');
+
+						return output;
+		} catch (error) {
+			console.error("Error generating Hayagriva with citation-js:", error);
+			throw new Error(`Failed to generate Hayagriva: ${error.message}`);
+		}
 	}
 
 	/**
@@ -593,6 +601,75 @@ export class SourceService {
 		});
 
 		return `[${formattedItems.join(', ')}]`;
+	}
+
+	/**
+	 * Convert frontmatter data to citation-js format using field mappings
+	 */
+	private convertFrontmatterToCitationJS(frontmatter: any): any | null {
+		if (!frontmatter.citekey) {
+			return null;
+		}
+
+		// Get field mappings from settings or use defaults
+		// TODO: Access settings through plugin reference
+		const mappings = DEFAULT_SETTINGS.fieldMappings;
+
+		// Create reverse mapping: bibliography field -> frontmatter key
+		const reverseMappings: Record<string, string> = {};
+		Object.entries(mappings).forEach(([frontmatterKey, bibField]) => {
+			reverseMappings[bibField] = frontmatterKey;
+		});
+
+		// Create citation-js entry
+		const citationEntry: any = {
+			id: frontmatter.citekey,
+			type: this.mapToBibTeXType(frontmatter.bibtype, frontmatter.category?.[0])
+		};
+
+		// Map fields using reverse mappings
+		for (const bibField of BIB_FIELDS) {
+			const frontmatterKey = reverseMappings[bibField];
+			if (frontmatterKey && frontmatter[frontmatterKey]) {
+				const value = frontmatter[frontmatterKey];
+
+				// Handle arrays specially for author and keywords
+				if (bibField === 'author' && Array.isArray(value)) {
+					citationEntry.author = value;
+				} else if (bibField === 'keywords' && Array.isArray(value)) {
+					citationEntry.keyword = value;
+				} else if (Array.isArray(value) && value.length > 0) {
+					// Convert other arrays to strings
+					citationEntry[bibField] = value.join(', ');
+				} else if (!Array.isArray(value) && value && value.toString().trim() !== '') {
+					citationEntry[bibField] = value;
+				}
+			}
+		}
+
+		// Handle special fields that need specific formatting
+		if (frontmatter[mappings.year] && typeof frontmatter[mappings.year] === 'string') {
+			// Extract year from date string if needed
+			const yearMatch = frontmatter[mappings.year].match(/\d{4}/);
+			if (yearMatch) {
+				citationEntry.year = yearMatch[0];
+			}
+		}
+
+		if (frontmatter[mappings.doi] && typeof frontmatter[mappings.doi] === 'string') {
+			// Clean up DOI - remove URL prefix if present
+			let doi = frontmatter[mappings.doi];
+			if (doi.startsWith('https://doi.org/')) {
+				doi = doi.replace('https://doi.org/', '');
+			} else if (doi.startsWith('http://dx.doi.org/')) {
+				doi = doi.replace('http://dx.doi.org/', '');
+			} else if (doi.startsWith('doi:')) {
+				doi = doi.replace('doi:', '').trim();
+			}
+			citationEntry.doi = doi;
+		}
+
+		return citationEntry;
 	}
 
 	/**

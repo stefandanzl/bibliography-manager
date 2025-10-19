@@ -19,6 +19,7 @@ export interface BibliographySettings {
 	crossrefEmail: string;
 	sourceNoteTemplate: string;
 	templateFile: string;
+	fieldMappings: Record<string, string>;
 }
 
 // Default settings
@@ -69,7 +70,44 @@ DOI: {{doi}}
 URL: {{url}}
 `,
 	templateFile: "",
+	fieldMappings: {
+		"citekey": "citekey",
+		"title": "title",
+		"author": "author",
+		"keywords": "keywords",
+		"bibtype": "bibtype",
+		"year": "year",
+		"doi": "doi",
+		"isbn": "isbn",
+		"publisher": "publisher",
+		"journal": "journal",
+		"volume": "volume",
+		"number": "number",
+		"pages": "pages",
+		"abstract": "abstract",
+		"url": "url",
+		"downloadurl": "downloadurl",
+		"imageurl": "imageurl",
+		"added": "added",
+		"started": "started",
+		"ended": "ended",
+		"rating": "rating",
+		"currentpage": "currentpage",
+		"status": "status",
+		"filelink": "filelink",
+		"filename": "filename",
+		"atcitekey": "atcitekey",
+	},
 };
+
+// Standard bibliography fields for citation-js conversion
+export const BIB_FIELDS = [
+	"title", "author", "year", "publisher", "journal", "booktitle",
+	"doi", "url", "isbn", "issn", "pages", "volume", "number",
+	"keywords", "abstract", "note", "language", "editor", "series",
+	"edition", "chapter", "institution", "organization", "school",
+	"address", "month", "day"
+];
 
 // Folder suggestion class for autocompleting folder paths
 class FolderSuggest extends AbstractInputSuggest<string> {
@@ -326,7 +364,96 @@ export class BibliographySettingTab extends PluginSettingTab {
 				new TemplateFileSuggest(this.app, text.inputEl);
 			});
 
-		
+		containerEl.createEl("h3", { text: "Field Mappings" });
+
+		const mappingDetails = new Setting(containerEl)
+			.setDesc("Map frontmatter keys to bibliography data fields for proper export.")
+			.setName("");
+
+		// Create collapsible section using Setting component
+		const mappingContainer = containerEl.createDiv();
+		mappingContainer.style.marginTop = "10px";
+		mappingContainer.style.marginBottom = "20px";
+
+		// Add toggle button using Setting component
+		new Setting(mappingContainer)
+			.setName("Show Field Mappings")
+			.setDesc("")
+			.addToggle((toggle) => {
+				toggle.setValue(false);
+				toggle.onChange(async (value) => {
+					const contentContainer = mappingContainer.querySelector(".field-mappings-content");
+					if (contentContainer) {
+						(contentContainer as HTMLElement).style.display = value ? "block" : "none";
+					}
+				});
+			});
+
+		// Create content container (hidden by default)
+		const contentContainer = mappingContainer.createDiv();
+		contentContainer.className = "field-mappings-content";
+		contentContainer.style.display = "none";
+		contentContainer.style.marginTop = "10px";
+		contentContainer.style.padding = "15px";
+		contentContainer.style.backgroundColor = "var(--background-secondary)";
+		contentContainer.style.borderRadius = "5px";
+		contentContainer.style.border = "1px solid var(--background-modifier-border)";
+
+		// Get default mappings from DEFAULT_SETTINGS
+		const defaultMappings = DEFAULT_SETTINGS.fieldMappings;
+		const currentMappings = this.plugin.settings.fieldMappings || {};
+
+		// Add column headers
+		const headerRow = contentContainer.createDiv();
+		headerRow.style.display = "grid";
+		headerRow.style.gridTemplateColumns = "1fr 1fr";
+		headerRow.style.gap = "10px";
+		headerRow.style.fontWeight = "bold";
+		headerRow.style.marginBottom = "10px";
+		headerRow.style.borderBottom = "1px solid var(--background-modifier-border)";
+		headerRow.style.paddingBottom = "10px";
+
+		const frontmatterHeader = headerRow.createDiv({ text: "Frontmatter Key" });
+		const bibliographyHeader = headerRow.createDiv({ text: "Bibliography Field" });
+
+		// Create input fields for each mapping
+		Object.entries(defaultMappings).forEach(([frontmatterKey, bibField]) => {
+			const fieldRow = contentContainer.createDiv();
+			fieldRow.style.display = "grid";
+			fieldRow.style.gridTemplateColumns = "1fr 1fr";
+			fieldRow.style.gap = "10px";
+			fieldRow.style.alignItems = "center";
+			fieldRow.style.marginBottom = "8px";
+
+			// Frontmatter key column
+			const keyCell = fieldRow.createDiv();
+			keyCell.style.fontFamily = "var(--font-monospace)";
+			keyCell.style.fontSize = "var(--font-ui-smaller)";
+			keyCell.style.color = "var(--text-muted)";
+			keyCell.textContent = frontmatterKey;
+
+			// Bibliography field column (editable)
+			const fieldCell = fieldRow.createDiv();
+			new Setting(fieldCell)
+				.setName("")
+				.setDesc("")
+				.addText((text) => {
+					text.setPlaceholder(bibField as string)
+						.setValue(currentMappings[frontmatterKey] || (bibField as string))
+						.onChange(async (value) => {
+							if (!this.plugin.settings.fieldMappings) {
+								this.plugin.settings.fieldMappings = {};
+							}
+							if (value.trim()) {
+								this.plugin.settings.fieldMappings[frontmatterKey] = value.trim();
+							} else {
+								delete this.plugin.settings.fieldMappings[frontmatterKey];
+							}
+							await this.plugin.saveSettings();
+						});
+				});
+		});
+
 		containerEl.createEl("h3", { text: "API Usage" });
 
 		const apiInfo = containerEl.createDiv();
