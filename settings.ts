@@ -71,32 +71,34 @@ URL: {{url}}
 `,
 	templateFile: "",
 	fieldMappings: {
-		"citekey": "citekey",
+		// CSL-JSON standard fields (bibliography field -> frontmatter key)
+		"id": "citekey",
+		"type": "bibtype",
 		"title": "title",
 		"author": "author",
-		"keywords": "keywords",
-		"bibtype": "bibtype",
-		"year": "year",
-		"doi": "doi",
-		"isbn": "isbn",
+		"editor": "editor",
+		"translator": "translator",
 		"publisher": "publisher",
-		"journal": "journal",
+		"publisher-place": "publisher-place",
+		"container-title": "journal",
 		"volume": "volume",
-		"number": "number",
-		"pages": "pages",
+		"issue": "number",
+		"page": "pages",
+		"issued": "year",
+		"DOI": "doi",
+		"ISBN": "isbn",
+		"ISSN": "issn",
+		"URL": "url",
 		"abstract": "abstract",
-		"url": "url",
-		"downloadurl": "downloadurl",
-		"imageurl": "imageurl",
-		"added": "added",
-		"started": "started",
-		"ended": "ended",
-		"rating": "rating",
-		"currentpage": "currentpage",
-		"status": "status",
-		"filelink": "filelink",
-		"filename": "filename",
-		"atcitekey": "atcitekey",
+		"keyword": "keywords",
+		"note": "note",
+		"language": "language",
+		"edition": "edition",
+		"series": "series",
+		"chapter-number": "chapter",
+		"event-title": "booktitle",
+		"genre": "genre",
+		"accessed": "accessed",
 	},
 };
 
@@ -367,7 +369,7 @@ export class BibliographySettingTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "Field Mappings" });
 
 		const mappingDetails = new Setting(containerEl)
-			.setDesc("Map frontmatter keys to bibliography data fields for proper export.")
+			.setDesc("Map standard CSL-JSON bibliography fields to your custom frontmatter keys.")
 			.setName("");
 
 		// Create collapsible section using Setting component
@@ -413,11 +415,11 @@ export class BibliographySettingTab extends PluginSettingTab {
 		headerRow.style.borderBottom = "1px solid var(--background-modifier-border)";
 		headerRow.style.paddingBottom = "10px";
 
-		const frontmatterHeader = headerRow.createDiv({ text: "Frontmatter Key" });
 		const bibliographyHeader = headerRow.createDiv({ text: "Bibliography Field" });
+		const frontmatterHeader = headerRow.createDiv({ text: "Frontmatter Key" });
 
 		// Create input fields for each mapping
-		Object.entries(defaultMappings).forEach(([frontmatterKey, bibField]) => {
+		Object.entries(defaultMappings).forEach(([bibField, frontmatterKey]) => {
 			const fieldRow = contentContainer.createDiv();
 			fieldRow.style.display = "grid";
 			fieldRow.style.gridTemplateColumns = "1fr 1fr";
@@ -425,29 +427,29 @@ export class BibliographySettingTab extends PluginSettingTab {
 			fieldRow.style.alignItems = "center";
 			fieldRow.style.marginBottom = "8px";
 
-			// Frontmatter key column
-			const keyCell = fieldRow.createDiv();
-			keyCell.style.fontFamily = "var(--font-monospace)";
-			keyCell.style.fontSize = "var(--font-ui-smaller)";
-			keyCell.style.color = "var(--text-muted)";
-			keyCell.textContent = frontmatterKey;
+			// Bibliography field column (read-only, left side)
+			const bibFieldCell = fieldRow.createDiv();
+			bibFieldCell.style.fontFamily = "var(--font-monospace)";
+			bibFieldCell.style.fontSize = "var(--font-ui-smaller)";
+			bibFieldCell.style.color = "var(--text-muted)";
+			bibFieldCell.textContent = bibField;
 
-			// Bibliography field column (editable)
-			const fieldCell = fieldRow.createDiv();
-			new Setting(fieldCell)
+			// Frontmatter key column (editable, right side)
+			const keyCell = fieldRow.createDiv();
+			new Setting(keyCell)
 				.setName("")
 				.setDesc("")
 				.addText((text) => {
-					text.setPlaceholder(bibField as string)
-						.setValue(currentMappings[frontmatterKey] || (bibField as string))
+					text.setPlaceholder(frontmatterKey as string)
+						.setValue(currentMappings[bibField] || (frontmatterKey as string))
 						.onChange(async (value) => {
 							if (!this.plugin.settings.fieldMappings) {
 								this.plugin.settings.fieldMappings = {};
 							}
 							if (value.trim()) {
-								this.plugin.settings.fieldMappings[frontmatterKey] = value.trim();
+								this.plugin.settings.fieldMappings[bibField] = value.trim();
 							} else {
-								delete this.plugin.settings.fieldMappings[frontmatterKey];
+								delete this.plugin.settings.fieldMappings[bibField];
 							}
 							await this.plugin.saveSettings();
 						});

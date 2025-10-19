@@ -348,87 +348,16 @@ export class SourceService {
 	}
 
 	/**
-	 * Generate BibTeX content from all source files
+	 * Generate bibliography in specified format from all source files
+	 * @param sourcesFolder - Folder containing source files
+	 * @param format - Output format: 'bibtex', 'csl-json', or 'hayagriva'
 	 */
-	async generateBibTeXFromSources(sourcesFolder: string): Promise<string> {
-		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
-		const bibtexEntries: string[] = [];
-		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
-		let duplicatesFound = 0;
-
-		// console.log('DEBUG: Processing sources for BibTeX generation (SourceService):');
-		sourceFiles.forEach((file, index) => {
-			const cache = this.app.metadataCache.getFileCache(file);
-			const frontmatter = cache?.frontmatter;
-			const citekey = frontmatter?.citekey;
-			// console.log(`  ${index + 1}. citekey: "${citekey}", file: "${file.path}"`);
-		});
-
-		for (const file of sourceFiles) {
-			const cache = this.app.metadataCache.getFileCache(file);
-			const frontmatter = cache?.frontmatter;
-
-			if (frontmatter) {
-				const citekey = frontmatter.citekey;
-
-				if (!citekey) {
-										continue;
-				}
-
-				// Check for duplicates
-				if (seenCitekeys.has(citekey)) {
-					duplicatesFound++;
-					const existing = seenCitekeys.get(citekey)!;
-					console.log(`%cDUPLICATE CITEKEY FOUND: ${citekey}%c\nOriginal: ${existing.file.path}\nDuplicate: ${file.path}`, 'color: #7f6df2; font-weight: bold;', 'color: #7f6df2;');
-
-					// Update count for reporting
-					existing.count++;
-				} else {
-					// First occurrence of this citekey
-					seenCitekeys.set(citekey, { file, count: 1 });
-
-					const bibtexEntry =
-						this.convertFrontmatterToBibTeX(frontmatter);
-					if (bibtexEntry) {
-						bibtexEntries.push(bibtexEntry);
-					}
-				}
-			}
-		}
-
-		if (duplicatesFound > 0) {
-			console.warn(
-				`Found ${duplicatesFound} duplicate citekeys during BibTeX generation`
-			);
-			// console.warn("Duplicate details:");
-			seenCitekeys.forEach((data, citekey) => {
-				if (data.count > 1) {
-					console.warn(
-						`- ${citekey}: ${data.count} total occurrences`
-					);
-				}
-			});
-
-			// Show notice to user
-			new Notice(
-				`Found ${duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
-			);
-		}
-
-		
-		return bibtexEntries.join("\n\n");
-	}
-
-	/**
-	 * Generate Hayagriva content from all source files
-	 */
-	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
+	async generateBibliography(sourcesFolder: string, format: 'bibtex' | 'csl-json' | 'hayagriva'): Promise<string> {
 		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
 		const citeData: any[] = [];
 		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
 		let duplicatesFound = 0;
 
-		
 		for (const file of sourceFiles) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const frontmatter = cache?.frontmatter;
@@ -437,7 +366,7 @@ export class SourceService {
 				const citekey = frontmatter.citekey;
 
 				if (!citekey) {
-										continue;
+					continue;
 				}
 
 				// Check for duplicates
@@ -463,7 +392,7 @@ export class SourceService {
 
 		if (duplicatesFound > 0) {
 			console.warn(
-				`Found ${duplicatesFound} duplicate citekeys during Hayagriva generation`
+				`Found ${duplicatesFound} duplicate citekeys during bibliography generation`
 			);
 			new Notice(
 				`Found ${duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
@@ -471,70 +400,52 @@ export class SourceService {
 		}
 
 		if (citeData.length === 0) {
-			console.warn("No valid source data found for Hayagriva generation");
+			console.warn(`No valid source data found for ${format} generation`);
 			return "";
 		}
 
 		try {
-			
-			// Use citation-js to format as Hayagriva
+			// Use citation-js to format as requested
 			const cite = new Cite(citeData);
-			const output = cite.format('hayagriva');
 
-						return output;
-		} catch (error) {
-			console.error("Error generating Hayagriva with citation-js:", error);
-			throw new Error(`Failed to generate Hayagriva: ${error.message}`);
-		}
-	}
-
-	/**
-	 * Convert frontmatter data to BibTeX entry
-	 */
-	private convertFrontmatterToBibTeX(frontmatter: any): string | null {
-		if (!frontmatter.citekey) {
-			return null;
-		}
-
-		// Map BibTeX type from our custom types
-		const bibType = this.mapToBibTeXType(
-			frontmatter.bibtype,
-			frontmatter.category?.[0]
-		);
-
-		let entry = `@${bibType}{${frontmatter.citekey},\n`;
-
-		// Add various fields
-		const fields = [
-			["title", frontmatter.title],
-			["author", this.formatAuthorsForBibTeX(frontmatter.author)],
-			["year", frontmatter.year],
-			["publisher", frontmatter.publisher],
-			["journal", frontmatter.journal],
-			["volume", frontmatter.volume],
-			["number", frontmatter.number],
-			["pages", frontmatter.pages],
-			["doi", frontmatter.doi],
-			["isbn", frontmatter.isbn],
-			["url", frontmatter.url],
-			["abstract", frontmatter.abstract],
-		];
-
-		fields.forEach(([key, value]) => {
-			if (value && typeof value === "string") {
-				entry += `  ${key} = {${value}},\n`;
+			switch (format) {
+				case 'bibtex':
+					return cite.format('bibtex', {
+						format: 'text',
+						lang: 'en-US'
+					});
+				case 'hayagriva':
+					return cite.format('hayagriva');
+				case 'csl-json':
+					return JSON.stringify(citeData, null, 2);
+				default:
+					throw new Error(`Unsupported format: ${format}`);
 			}
-		});
-
-		// Remove trailing comma and close entry
-		entry = entry.replace(/,\n$/, "\n");
-		entry += "}\n";
-
-		return entry;
+		} catch (error) {
+			console.error(`Error generating ${format} with citation-js:`, error);
+			throw new Error(`Failed to generate ${format}: ${error.message}`);
+		}
 	}
 
 	/**
-	 * Map our source types to BibTeX types
+	 * Generate BibTeX content from all source files
+	 * @deprecated Use generateBibliography(sourcesFolder, 'bibtex') instead
+	 */
+	async generateBibTeXFromSources(sourcesFolder: string): Promise<string> {
+		return this.generateBibliography(sourcesFolder, 'bibtex');
+	}
+
+	/**
+	 * Generate Hayagriva content from all source files
+	 * @deprecated Use generateBibliography(sourcesFolder, 'hayagriva') instead
+	 */
+	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
+		return this.generateBibliography(sourcesFolder, 'hayagriva');
+	}
+
+
+	/**
+	 * Map our source types to CSL-JSON/BibTeX types
 	 */
 	private mapToBibTeXType(bibType: string, category: string): string {
 		if (bibType && bibType !== "misc") {
@@ -548,39 +459,14 @@ export class SourceService {
 			case "paper":
 				return "article";
 			case "website":
-				return "online";
+				return "webpage";
 			case "thesis":
-				return "phdthesis";
+				return "thesis";
 			case "report":
-				return "techreport";
+				return "report";
 			default:
-				return "misc";
+				return "article";
 		}
-	}
-
-	/**
-	 * Format authors array for BibTeX
-	 */
-	private formatAuthorsForBibTeX(authors: string[]): string | null {
-		if (!authors || authors.length === 0) {
-			return null;
-		}
-
-		return authors
-			.map((author) => {
-				// Try to format as "Last, First" if not already in that format
-				if (author.includes(",")) {
-					return author;
-				}
-				const parts = author.split(/\s+/);
-				if (parts.length >= 2) {
-					const first = parts.slice(0, -1).join(" ");
-					const last = parts[parts.length - 1];
-					return `${last}, ${first}`;
-				}
-				return author;
-			})
-			.join(" and ");
 	}
 
 	private formatYamlArray(array: any[]): string {
@@ -615,28 +501,25 @@ export class SourceService {
 		// TODO: Access settings through plugin reference
 		const mappings = DEFAULT_SETTINGS.fieldMappings;
 
-		// Create reverse mapping: bibliography field -> frontmatter key
-		const reverseMappings: Record<string, string> = {};
-		Object.entries(mappings).forEach(([frontmatterKey, bibField]) => {
-			reverseMappings[bibField] = frontmatterKey;
-		});
+		// Mappings are now: bibliography field -> frontmatter key
+		// So we can use them directly
 
 		// Create citation-js entry
 		const citationEntry: any = {
-			id: frontmatter.citekey,
-			type: this.mapToBibTeXType(frontmatter.bibtype, frontmatter.category?.[0])
+			id: frontmatter[mappings.id] || frontmatter.citekey,
+			type: this.mapToBibTeXType(frontmatter[mappings.type] || frontmatter.bibtype, frontmatter.category?.[0])
 		};
 
-		// Map fields using reverse mappings
+		// Map fields using mappings directly
 		for (const bibField of BIB_FIELDS) {
-			const frontmatterKey = reverseMappings[bibField];
+			const frontmatterKey = mappings[bibField];
 			if (frontmatterKey && frontmatter[frontmatterKey]) {
 				const value = frontmatter[frontmatterKey];
 
 				// Handle arrays specially for author and keywords
 				if (bibField === 'author' && Array.isArray(value)) {
 					citationEntry.author = value;
-				} else if (bibField === 'keywords' && Array.isArray(value)) {
+				} else if (bibField === 'keyword' && Array.isArray(value)) {
 					citationEntry.keyword = value;
 				} else if (Array.isArray(value) && value.length > 0) {
 					// Convert other arrays to strings
@@ -648,17 +531,23 @@ export class SourceService {
 		}
 
 		// Handle special fields that need specific formatting
-		if (frontmatter[mappings.year] && typeof frontmatter[mappings.year] === 'string') {
-			// Extract year from date string if needed
-			const yearMatch = frontmatter[mappings.year].match(/\d{4}/);
-			if (yearMatch) {
-				citationEntry.year = yearMatch[0];
+		const yearKey = mappings['issued'] || 'year';
+		if (frontmatter[yearKey]) {
+			if (typeof frontmatter[yearKey] === 'string') {
+				// Extract year from date string if needed
+				const yearMatch = frontmatter[yearKey].match(/\d{4}/);
+				if (yearMatch) {
+					citationEntry.issued = { 'date-parts': [[yearMatch[0]]] };
+				}
+			} else if (typeof frontmatter[yearKey] === 'number') {
+				citationEntry.issued = { 'date-parts': [[frontmatter[yearKey]]] };
 			}
 		}
 
-		if (frontmatter[mappings.doi] && typeof frontmatter[mappings.doi] === 'string') {
+		const doiKey = mappings['DOI'] || 'doi';
+		if (frontmatter[doiKey] && typeof frontmatter[doiKey] === 'string') {
 			// Clean up DOI - remove URL prefix if present
-			let doi = frontmatter[mappings.doi];
+			let doi = frontmatter[doiKey];
 			if (doi.startsWith('https://doi.org/')) {
 				doi = doi.replace('https://doi.org/', '');
 			} else if (doi.startsWith('http://dx.doi.org/')) {
@@ -666,133 +555,10 @@ export class SourceService {
 			} else if (doi.startsWith('doi:')) {
 				doi = doi.replace('doi:', '').trim();
 			}
-			citationEntry.doi = doi;
+			citationEntry.DOI = doi;
 		}
 
 		return citationEntry;
 	}
 
-	/**
-	 * Convert frontmatter data to Hayagriva entry
-	 */
-	private convertFrontmatterToHayagriva(frontmatter: any): string | null {
-		if (!frontmatter.citekey) {
-			return null;
-		}
-
-		// Map our types to Hayagriva types
-		const hayagrivaType = this.mapToHayagrivaType(
-			frontmatter.bibtype,
-			frontmatter.category?.[0]
-		);
-
-		let entry = `${frontmatter.citekey}:\n`;
-		entry += `  type: ${hayagrivaType}\n`;
-
-		// Add various fields
-		const fields = [
-			["title", frontmatter.title],
-			["author", this.formatAuthorsForHayagriva(frontmatter.author)],
-			["year", frontmatter.year],
-			["publisher", frontmatter.publisher],
-			["journal", frontmatter.journal],
-			["booktitle", frontmatter.booktitle],
-			["doi", frontmatter.doi],
-			["url", frontmatter.url],
-			["isbn", frontmatter.isbn],
-			["issn", frontmatter.issn],
-			["pages", frontmatter.pages],
-			["volume", frontmatter.volume],
-			["number", frontmatter.number],
-			["keywords", frontmatter.keywords],
-			["abstract", frontmatter.abstract],
-			["note", frontmatter.note]
-		];
-
-		for (const [key, value] of fields) {
-			if (value && Array.isArray(value) && value.length > 0) {
-				if (key === 'author' || key === 'keywords') {
-					entry += `  ${key}:\n`;
-					value.forEach((item: any) => {
-						entry += `    - "${item}"\n`;
-					});
-				} else {
-					entry += `  ${key}: ["${value.join('", "')}"]\n`;
-				}
-			} else if (value && !Array.isArray(value) && value.toString().trim() !== '') {
-				if (typeof value === 'string') {
-					// Don't quote numbers and boolean values
-					entry += `  ${key}: "${value.replace(/"/g, '\\"')}"\n`;
-				} else {
-					entry += `  ${key}: ${value}\n`;
-				}
-			}
-		}
-
-		return entry;
-	}
-
-	/**
-	 * Map our custom types to Hayagriva types
-	 */
-	private mapToHayagrivaType(bibtype?: string, category?: string): string {
-		const typeMap: Record<string, string> = {
-			"article": "Article",
-			"journal": "Article",
-			"book": "Book",
-			"booklet": "Book",
-			"conference": "Conference",
-			"inbook": "Chapter",
-			"incollection": "Chapter",
-			"inproceedings": "Conference",
-			"manual": "Misc",
-			"mastersthesis": "Thesis",
-			"phdthesis": "Thesis",
-			"proceedings": "Book",
-			"techreport": "Report",
-			"unpublished": "Misc",
-			"webpage": "Web",
-			"website": "Web",
-			"online": "Web",
-			"report": "Report",
-			"thesis": "Thesis",
-			"chapter": "Chapter",
-			"collection": "Anthos",
-			"misc": "Misc"
-		};
-
-		if (bibtype && typeMap[bibtype.toLowerCase()]) {
-			return typeMap[bibtype.toLowerCase()];
-		}
-
-		// Fallback to category or default to Misc
-		if (category && typeMap[category.toLowerCase()]) {
-			return typeMap[category.toLowerCase()];
-		}
-
-		return "Misc";
-	}
-
-	/**
-	 * Format authors for Hayagriva
-	 */
-	private formatAuthorsForHayagriva(authors: any[]): string[] {
-		if (!authors || !Array.isArray(authors)) {
-			return [];
-		}
-
-		return authors.map(author => {
-			if (typeof author === 'string') {
-				return author;
-			}
-
-			// Handle author objects with family/given names
-			if (author.family && author.given) {
-				return `${author.family}, ${author.given}`;
-			}
-
-			// Handle other formats
-			return String(author);
-		}).filter(author => author && author.trim() !== '');
-	}
 }
