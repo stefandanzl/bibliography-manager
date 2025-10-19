@@ -518,8 +518,7 @@ export class SourceImporter {
 	constructor(
 		private app: App,
 		private sourcesFolder: string,
-		private template?: string,
-		private fieldMappings?: Record<string, string>
+		private template?: string
 	) {}
 
 	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
@@ -555,12 +554,11 @@ export class SourceImporter {
 			hasTemplate: !!this.template,
 			templateLength: this.template?.length || 0,
 			templatePreview: this.template?.substring(0, 50),
-			hasFieldMappings: !!this.fieldMappings,
-			willUseTemplate: (this.template && this.template.trim() && this.fieldMappings)
+			willUseTemplate: (this.template && this.template.trim())
 		});
 
 		// Use template if available, otherwise fall back to default markdown generation
-		const content = (this.template && this.template.trim() && this.fieldMappings)
+		const content = (this.template && this.template.trim())
 			? this.generateSourceFromTemplate({ ...sourceData, citekey })
 			: this.generateSourceMarkdown({ ...sourceData, citekey });
 
@@ -630,53 +628,50 @@ ${source.abstract || "<!-- Add abstract here -->"}
 		console.log('🚀 DEBUG: generateSourceFromTemplate called');
 		console.log('📋 Source data:', JSON.stringify(source, null, 2));
 
-		// Create template data object using field mappings
+		// Create template data object with direct field access
 		const templateData: Record<string, any> = {};
-		console.log('🔧 Field mappings available:', !!this.fieldMappings);
 		console.log('📄 Raw template content:', JSON.stringify(this.template, null, 2));
 
-		if (this.fieldMappings) {
-			// Map template placeholders to actual source data using field mappings
-			console.log('🔄 Processing field mappings...');
-			Object.entries(this.fieldMappings).forEach(([placeholder, frontmatterField]) => {
-				const value = source[frontmatterField];
-				console.log(`📝 Processing "${placeholder}" -> "${frontmatterField}":`, JSON.stringify(value, null, 2));
+		// Direct field mapping - template variables match source data fields
+		Object.keys(source).forEach(field => {
+			const value = source[field];
+			console.log(`📝 Processing field "${field}":`, JSON.stringify(value, null, 2));
 
-				if (value !== undefined && value !== null) {
-					// Handle special formatting for certain field types
-					if (placeholder === 'atcitekey') {
-						// Special handling for atcitekey - prepend @ symbol
-						templateData[placeholder] = `@${value}`;
-						console.log(`✅ Special handling for atcitekey: "${templateData[placeholder]}"`);
-					} else if (Array.isArray(value)) {
-						// For arrays, provide both array version (for YAML) and pre-formatted YAML array string
-						templateData[placeholder] = value;  // Keep as array for other uses
-						templateData[placeholder + 'Array'] = JSON.stringify(value);  // Pre-formatted YAML array
-						console.log(`✅ Array set for "${placeholder}":`, templateData[placeholder]);
-						console.log(`✅ Pre-formatted array for "${placeholder}Array":`, templateData[placeholder + 'Array']);
-					} else if (typeof value === 'string') {
-						templateData[placeholder] = value;
-						console.log(`✅ String set for "${placeholder}": "${templateData[placeholder]}"`);
-					} else {
-						templateData[placeholder] = String(value);
-						console.log(`✅ Converted to string for "${placeholder}": "${templateData[placeholder]}"`);
-					}
+			if (value !== undefined && value !== null) {
+				// Handle special formatting for certain fields
+				if (field === 'atcitekey') {
+					// Special handling for atcitekey - prepend @ symbol
+					templateData[field] = `@${value}`;
+					console.log(`✅ Special handling for atcitekey: "${templateData[field]}"`);
+				} else if (Array.isArray(value)) {
+					// For arrays, provide both array version (for other uses) and pre-formatted YAML array string
+					templateData[field] = value;  // Keep as array for other uses
+					// Format array as YAML array string without using it as object key
+					templateData[field + 'Array'] = this.formatYamlArray(value);  // Pre-formatted YAML array
+					console.log(`✅ Array set for "${field}":`, templateData[field]);
+					console.log(`✅ Pre-formatted array for "${field}Array":`, templateData[field + 'Array']);
+				} else if (typeof value === 'string') {
+					templateData[field] = value;
+					console.log(`✅ String set for "${field}": "${templateData[field]}"`);
 				} else {
-					// Set empty arrays for fields that should be arrays, empty strings for others
-					if (placeholder === 'author' || placeholder === 'keywords') {
-						templateData[placeholder] = [];  // Empty array for YAML
-						templateData[placeholder + 'Array'] = '[]';  // Empty YAML array string
-						console.log(`⚠️ Empty array set for "${placeholder}"`);
-						console.log(`⚠️ Empty array string for "${placeholder}Array"`);
-					} else {
-						templateData[placeholder] = '';
-						console.log(`⚠️ Empty value set for "${placeholder}"`);
-					}
+					templateData[field] = String(value);
+					console.log(`✅ Converted to string for "${field}": "${templateData[field]}"`);
 				}
-			});
-		}
+			} else {
+				// Set empty arrays for fields that should be arrays, empty strings for others
+				if (field === 'author' || field === 'keywords') {
+					templateData[field] = [];  // Empty array for YAML
+					templateData[field + 'Array'] = '[]';  // Empty YAML array string
+					console.log(`⚠️ Empty array set for "${field}"`);
+					console.log(`⚠️ Empty array string for "${field}Array"`);
+				} else {
+					templateData[field] = '';
+					console.log(`⚠️ Empty value set for "${field}"`);
+				}
+			}
+		});
 
-		// Add some helper functions for commonly used formats
+		// Add helper fields
 		templateData.authorList = Array.isArray(source.author)
 			? source.author.join(', ')
 			: source.author || '';
@@ -733,26 +728,60 @@ ${source.abstract || "<!-- Add abstract here -->"}
 
 	private renderTemplateWithRegex(template: string, data: Record<string, any>): string {
 		console.log('🔧 Starting regex template rendering...');
+		console.log('📝 Template input (first 200 chars):', template.substring(0, 200));
+		console.log('📊 Data keys:', Object.keys(data));
 
-		let result = template;
+		try {
+			let result = template;
 
-		// Replace simple {{variable}} placeholders only
-		result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
-			const trimmedPath = fieldPath.trim();
-			console.log(`🔄 Processing simple variable: "${trimmedPath}"`);
+			// Replace simple {{variable}} placeholders only
+			result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
+				const trimmedPath = fieldPath.trim();
+				console.log(`🔄 Processing simple variable: "${trimmedPath}"`);
+				try {
+					// Handle nested paths like "data.field"
+					const value = this.getNestedValue(data, trimmedPath);
+					console.log(`✅ Value for "${trimmedPath}":`, value);
+					const resultValue = value !== undefined && value !== null ? String(value) : '';
+					console.log(`📝 Final result for "${trimmedPath}": "${resultValue}"`);
+					return resultValue;
+				} catch (innerError) {
+					console.error(`💥 ERROR processing variable "${trimmedPath}":`, innerError);
+					return '';
+				}
+			});
 
-			// Handle nested paths like "data.field"
-			const value = this.getNestedValue(data, trimmedPath);
-			return value !== undefined && value !== null ? String(value) : '';
-		});
-
-		console.log('✅ Regex template rendering complete');
-		return result;
+			console.log('✅ Regex template rendering complete');
+			return result;
+		} catch (error) {
+			console.error('💥 CRITICAL ERROR in renderTemplateWithRegex:', error);
+			throw error;
+		}
 	}
 
 	private getNestedValue(obj: any, path: string): any {
 		return path.split('.').reduce((current, key) => {
 			return current && current[key] !== undefined ? current[key] : undefined;
 		}, obj);
+	}
+
+	private formatYamlArray(array: any[]): string {
+		if (!array || array.length === 0) {
+			return '[]';
+		}
+
+		// Format each element as a YAML string
+		const formattedItems = array.map(item => {
+			if (typeof item === 'string') {
+				return `"${item.replace(/"/g, '\\"')}"`;
+			} else if (typeof item === 'number' || typeof item === 'boolean') {
+				return String(item);
+			} else {
+				// For objects or complex types, convert to string
+				return `"${String(item).replace(/"/g, '\\"')}"`;
+			}
+		});
+
+		return `[${formattedItems.join(', ')}]`;
 	}
 }

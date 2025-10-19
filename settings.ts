@@ -17,7 +17,6 @@ export interface BibliographySettings {
 	crossrefEmail: string;
 	sourceNoteTemplate: string;
 	templateFile: string;
-	fieldMappings: Record<string, string>;
 }
 
 // Default settings
@@ -66,35 +65,6 @@ DOI: {{doi}}
 URL: {{url}}
 `,
 	templateFile: "",
-	fieldMappings: {
-		citekey: "citekey",
-		atcitekey: "citekey",
-		title: "title",
-		author: "author",
-		keywords: "keywords",
-		year: "year",
-		bibtype: "bibtype",
-		doi: "doi",
-		isbn: "isbn",
-		publisher: "publisher",
-		journal: "journal",
-		volume: "volume",
-		number: "number",
-		pages: "pages",
-		abstract: "abstract",
-		url: "url",
-		downloadurl: "downloadurl",
-		imageurl: "imageurl",
-		added: "added",
-		started: "started",
-		ended: "ended",
-		rating: "rating",
-		currentpage: "currentpage",
-		status: "status",
-		filelink: "filelink",
-		aliases: "aliases",
-		category: "category",
-	},
 };
 
 // Folder suggestion class for autocompleting folder paths
@@ -278,59 +248,7 @@ export class BibliographySettingTab extends PluginSettingTab {
 				new TemplateFileSuggest(this.app, text.inputEl);
 			});
 
-		containerEl.createEl("p", {
-			text: "Template placeholders are mapped to frontmatter fields using the mappings.yaml file in your plugin folder. Leave template file empty to use the default template.",
-			cls: "setting-item-description",
-		});
-
-		containerEl.createEl("h4", { text: "Available Placeholders" });
-		const placeholdersInfo = containerEl.createDiv({
-			cls: "setting-item-description",
-		});
-		placeholdersInfo.innerHTML = `
-			<strong>Core fields:</strong> {{citekey}}, {{title}}, {{author}}, {{year}}, {{bibtype}}<br>
-			<strong>Publication details:</strong> {{doi}}, {{isbn}}, {{publisher}}, {{journal}}, {{volume}}, {{number}}, {{pages}}<br>
-			<strong>Content:</strong> {{abstract}}, {{url}}, {{downloadurl}}, {{imageurl}}<br>
-			<strong>Reading progress:</strong> {{added}}, {{started}}, {{ended}}, {{rating}}, {{currentpage}}, {{status}}<br>
-			<strong>File data:</strong> {{filelink}}, {{aliases}}, {{category}}
-		`;
-
-		containerEl.createEl("p", {
-			text: "You can customize the mappings by editing the mappings.yaml file in your plugin folder.",
-			cls: "setting-item-description",
-		});
-
-		new Setting(containerEl)
-			.setName("Open field mappings file")
-			.setDesc(
-				"Edit the YAML file that maps template placeholders to frontmatter fields"
-			)
-			.addButton((button) => {
-				button
-					.setButtonText("Open")
-					.setCta()
-					.onClick(async () => {
-						try {
-							const mappingsPath = `${this.plugin.manifest.dir}/mappings.yaml`;
-							const file =
-								this.plugin.app.vault.getAbstractFileByPath(
-									mappingsPath
-								);
-							if (file) {
-								await this.plugin.app.workspace
-									.getLeaf(true)
-									.openFile(file as any);
-							} else {
-								new Notice(
-									"Field mappings file not found. It will be created automatically."
-								);
-							}
-						} catch (error) {
-							new Notice("Error opening field mappings file.");
-						}
-					});
-			});
-
+		
 		containerEl.createEl("h3", { text: "API Usage" });
 
 		const apiInfo = containerEl.createDiv();

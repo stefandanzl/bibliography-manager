@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp___mcp-get-community_server-curl__curl",
-      "Bash(task:*)"
+      "Bash(task:*)",
+      "Bash(npm run build:*)"
     ]
   },
   "enableAllProjectMcpServers": true

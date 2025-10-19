@@ -1,6 +1,5 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
-import * as Mustache from "mustache";
 
 export class SourceService {
 	app: App;
@@ -35,8 +34,7 @@ export class SourceService {
 	async createSourceFile(
 		sourceData: SourceData,
 		sourcesFolder: string,
-		template?: string,
-		fieldMappings?: Record<string, string>
+		template?: string
 	): Promise<TFile | null> {
 		try {
 			// Ensure sources folder exists
@@ -52,7 +50,7 @@ export class SourceService {
 			const filePath = normalizePath(`${fullPath}/${filename}.md`);
 
 			// Generate file content
-			const content = this.generateSourceFileContent(sourceData, template, fieldMappings);
+			const content = this.generateSourceFileContent(sourceData, template);
 
 			// Create file using Obsidian API
 			const file = await this.app.vault.create(filePath, content);
@@ -177,12 +175,11 @@ export class SourceService {
 	 */
 	private generateSourceFileContent(
 		sourceData: SourceData,
-		template?: string,
-		fieldMappings?: Record<string, string>
+		template?: string
 	): string {
-		// If template is provided, use Mustache rendering
-		if (template && fieldMappings) {
-			return this.renderTemplate(template, sourceData, fieldMappings);
+		// If template is provided, use regex rendering (simplified)
+		if (template) {
+			return this.renderTemplate(template, sourceData);
 		}
 
 		// Fallback to original behavior
@@ -213,48 +210,58 @@ export class SourceService {
 	}
 
 	/**
-	 * Render template using Mustache and field mappings
+	 * Render template using simple regex replacement
 	 */
 	private renderTemplate(
 		template: string,
-		sourceData: SourceData,
-		fieldMappings: Record<string, string>
+		sourceData: SourceData
 	): string {
-		// Create template data object using field mappings
+		// Create template data object with direct field access
 		const templateData: Record<string, any> = {};
 
-		// Map template placeholders to actual source data using field mappings
-		Object.entries(fieldMappings).forEach(([placeholder, frontmatterField]) => {
-			const value = sourceData[frontmatterField as keyof SourceData];
+		// Direct field mapping - template variables match source data fields
+		Object.keys(sourceData).forEach(field => {
+			const value = sourceData[field as keyof SourceData];
 
 			if (value !== undefined && value !== null) {
-				// Handle special formatting for certain field types
-				if (Array.isArray(value)) {
-					// For arrays, keep them as arrays for Mustache to iterate
-					templateData[placeholder] = value;
+				// Handle special formatting for certain fields
+				if (field === 'atcitekey') {
+					// Special handling for atcitekey - prepend @ symbol
+					templateData[field] = `@${value}`;
+				} else if (Array.isArray(value)) {
+					// For arrays, provide both array version and pre-formatted YAML array string
+					templateData[field] = value;  // Keep as array for other uses
+					templateData[field + 'Array'] = this.formatYamlArray(value);  // Pre-formatted YAML array
 				} else if (typeof value === 'string') {
-					templateData[placeholder] = value;
+					templateData[field] = value;
 				} else {
-					templateData[placeholder] = String(value);
+					templateData[field] = String(value);
 				}
 			} else {
-				templateData[placeholder] = '';
+				// Set empty arrays for fields that should be arrays, empty strings for others
+				if (field === 'author' || field === 'keywords') {
+					templateData[field] = [];  // Empty array for YAML
+					templateData[field + 'Array'] = '[]';  // Empty YAML array string
+				} else {
+					templateData[field] = '';
+				}
 			}
 		});
 
-		// Add some helper functions for commonly used formats
+		// Add helper fields
 		templateData.authorList = Array.isArray(sourceData.author)
 			? sourceData.author.join(', ')
 			: sourceData.author || '';
 
-		// Render the template
-		try {
-			return Mustache.render(template, templateData);
-		} catch (error) {
-			console.error('Error rendering template:', error);
-			// Fallback to basic content
-			return this.generateBasicSourceContent(sourceData);
-		}
+		// Simple regex replacement for template variables
+		let result = template;
+		result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
+			const trimmedPath = fieldPath.trim();
+			const value = templateData[trimmedPath];
+			return value !== undefined && value !== null ? String(value) : '';
+		});
+
+		return result;
 	}
 
 	/**
@@ -496,5 +503,25 @@ export class SourceService {
 				return author;
 			})
 			.join(" and ");
+	}
+
+	private formatYamlArray(array: any[]): string {
+		if (!array || array.length === 0) {
+			return '[]';
+		}
+
+		// Format each element as a YAML string
+		const formattedItems = array.map(item => {
+			if (typeof item === 'string') {
+				return `"${item.replace(/"/g, '\\"')}"`;
+			} else if (typeof item === 'number' || typeof item === 'boolean') {
+				return String(item);
+			} else {
+				// For objects or complex types, convert to string
+				return `"${String(item).replace(/"/g, '\\"')}"`;
+			}
+		});
+
+		return `[${formattedItems.join(', ')}]`;
 	}
 }

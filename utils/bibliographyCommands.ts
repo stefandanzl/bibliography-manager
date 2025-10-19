@@ -776,13 +776,11 @@ export class SourceImportModal extends Modal {
 			console.log('🗂️ Media type:', this.mediaType);
 			console.log('📁 Settings sources folder:', this.settings.sourcesFolder);
 			console.log('📝 Settings template (first 100 chars):', this.settings.sourceNoteTemplate?.substring(0, 100));
-			console.log('🔧 Settings field mappings:', JSON.stringify(this.settings.fieldMappings, null, 2));
 
 			const importer = new SourceImporter(
 				this.app,
 				this.settings.sourcesFolder,
-				this.settings.sourceNoteTemplate,
-				this.settings.fieldMappings
+				this.settings.sourceNoteTemplate
 			);
 			const newFile = await importer.createSourceFile(
 				this.sourceData,

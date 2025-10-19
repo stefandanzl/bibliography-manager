@@ -4,8 +4,6 @@ import { SourceService } from "./utils/sourceService";
 import { SourceData, setCrossrefUserAgent } from "./utils/sourceManager";
 import { getBibliographyCommands } from "./utils/bibliographyCommands";
 import { BibliographySettingTab } from "./settings";
-import * as YAML from "yaml";
-import * as Mustache from "mustache";
 
 // Import settings and defaults from settings file
 import { BibliographySettings, DEFAULT_SETTINGS } from "./settings";
@@ -109,9 +107,6 @@ export default class BibliographyManagerPlugin extends Plugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
-
-		// Load field mappings from YAML file
-		await this.loadFieldMappings();
 	}
 
 	async saveSettings() {
@@ -123,44 +118,6 @@ export default class BibliographyManagerPlugin extends Plugin {
 			this.app,
 			this.settings
 		);
-	}
-
-	private async loadFieldMappings(): Promise<void> {
-		try {
-			const mappingsPath = `${this.manifest.dir}/mappings.yaml`;
-			const fileExists = await this.app.vault.adapter.exists(
-				mappingsPath
-			);
-
-			if (fileExists) {
-				const mappingsContent = await this.app.vault.adapter.read(
-					mappingsPath
-				);
-				const parsedMappings = YAML.parse(mappingsContent) as Record<
-					string,
-					string
-				>;
-
-				// Merge with defaults, keeping user customizations
-				this.settings.fieldMappings = {
-					...DEFAULT_SETTINGS.fieldMappings,
-					...parsedMappings,
-				};
-
-				console.log("Loaded field mappings from YAML file");
-			} else {
-				// Create default YAML file if it doesn't exist
-				await this.createDefaultMappingsFile();
-				console.log("Created default mappings.yaml file");
-			}
-
-			// Load template file if specified
-			await this.loadTemplateFile();
-		} catch (error) {
-			console.error("Error loading field mappings:", error);
-			// Fall back to default mappings
-			this.settings.fieldMappings = DEFAULT_SETTINGS.fieldMappings;
-		}
 	}
 
 	public async loadTemplateFile(): Promise<void> {
@@ -200,60 +157,6 @@ export default class BibliographyManagerPlugin extends Plugin {
 			// Fall back to default template
 			this.settings.sourceNoteTemplate =
 				DEFAULT_SETTINGS.sourceNoteTemplate;
-		}
-	}
-
-	private async createDefaultMappingsFile(): Promise<void> {
-		try {
-			const mappingsPath = `${this.manifest.dir}/mappings.yaml`;
-			const defaultMappingsContent = `# Field mappings for bibliography templates
-# Format: template-placeholder: frontmatter-property
-# This file maps {{placeholder}} names in templates to actual frontmatter property names
-
-# Core bibliographic fields
-citekey: citekey
-title: title
-author: author
-year: year
-bibtype: bibtype
-
-# Publication details
-doi: doi
-isbn: isbn
-publisher: publisher
-journal: journal
-volume: volume
-number: number
-pages: pages
-
-# URLs and resources
-abstract: abstract
-url: url
-downloadurl: downloadurl
-imageurl: imageurl
-
-# Reading progress and metadata
-added: added
-started: started
-ended: ended
-rating: rating
-currentpage: currentpage
-status: status
-
-# File and reference data
-filelink: filelink
-aliases: aliases
-category: category
-
-# Optional custom mappings (uncomment and modify as needed)
-# Example: Use {{authors}} in template to map to 'author' frontmatter field
-# authors: author
-# publicationYear: year
-# publicationTitle: title
-`;
-			await this.app.vault.create(mappingsPath, defaultMappingsContent);
-		} catch (error) {
-			console.error("Error creating default mappings file:", error);
 		}
 	}
 
@@ -381,8 +284,7 @@ category: category
 					const newFile = await this.sourceService.createSourceFile(
 						sourceData as SourceData,
 						sourcesFolder,
-						this.settings.sourceNoteTemplate,
-						this.settings.fieldMappings
+						this.settings.sourceNoteTemplate
 					);
 
 					if (newFile) {

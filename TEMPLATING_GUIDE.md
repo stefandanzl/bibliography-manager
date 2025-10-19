@@ -258,15 +258,7 @@ Filename: "A-Study-of-Machine-Learning-Results-Analysis"
 
 ## Field Mappings
 
-Template variables are mapped to actual data fields through the `mappings.yaml` file. You can customize which data fields correspond to which template variables by editing this file.
-
-Default mappings include:
-- `citekey` → `citekey`
-- `title` → `title`
-- `author` → `author`
-- `year` → `year`
-- `doi` → `doi`
-- etc.
+Template variables directly correspond to data field names. No mapping file is needed - template placeholders like `{{citekey}}`, `{{title}}`, `{{author}}` etc. directly access the corresponding fields in the source data.
 
 ## Tips and Best Practices
 
