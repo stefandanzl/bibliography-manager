@@ -207,9 +207,11 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 			// Export bibliography to a specific path
 			exportBibliographyToPath: async (config) => {
+				console.log("🚀 exportBibliographyToPath called with config:", config);
 				try {
 					const sourcesFolder =
 						config.sourcesFolder || this.settings.sourcesFolder;
+					console.log("📂 Using sources folder:", sourcesFolder);
 
 					let bibContent;
 					const format = config.format || this.settings.bibliographyFormat;
@@ -404,7 +406,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 						"hayagriva": ".yaml"
 					};
 					const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
-					const bibPath = `${this.settings.sourcesFolder}/${this.settings.bibliographyFilename}${extension}`;
+					const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
+					const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
 
 					await this.api.exportBibliographyToPath({
 						outputPath: bibPath,

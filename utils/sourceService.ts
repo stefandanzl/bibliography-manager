@@ -1,5 +1,8 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
+
+// @ts-ignore - citation-js doesn't have official TypeScript types
+import { Cite } from "@citation-js/core";
 require('@citation-js/plugin-hayagriva');
 
 export class SourceService {
@@ -306,13 +309,17 @@ export class SourceService {
 		const sourceFiles: TFile[] = [];
 
 		try {
+			console.log(`🔍 Searching for source files in: ${sourcesFolder}`);
 			const folder = this.app.vault.getAbstractFileByPath(sourcesFolder);
 			if (!(folder instanceof TFolder)) {
+				console.warn(`⚠️ Sources folder not found or not a folder: ${sourcesFolder}`);
 				return sourceFiles;
 			}
 
+			console.log(`📁 Found sources folder, searching recursively...`);
 			// Recursively search for markdown files
 			await this.searchSourceFilesRecursive(folder, sourceFiles);
+			console.log(`✅ Found ${sourceFiles.length} source files with citekeys`);
 		} catch (error) {
 			console.error("Error finding source files:", error);
 		}
@@ -330,10 +337,15 @@ export class SourceService {
 		for (const child of folder.children) {
 			if (child instanceof TFile && child.extension === "md") {
 				const cache = this.app.metadataCache.getFileCache(child);
-				if (cache?.frontmatter?.citekey) {
+				const hasCitekey = cache?.frontmatter?.citekey;
+				if (hasCitekey) {
+					console.log(`📄 Found source: ${child.name} with citekey: ${cache.frontmatter?.citekey}`);
 					sourceFiles.push(child);
+				} else {
+					console.log(`📄 Skipping markdown file without citekey: ${child.name}`);
 				}
 			} else if (child instanceof TFolder) {
+				console.log(`📂 Entering subfolder: ${child.name}`);
 				await this.searchSourceFilesRecursive(child, sourceFiles);
 			}
 		}

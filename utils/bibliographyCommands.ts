@@ -11,6 +11,7 @@ import {
 import { BibliographySettings } from "../settings";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "../main";
+import { SourceService } from "./sourceService";
 import {
 	testDOIBasic,
 	testDOIFormats,
@@ -99,10 +100,12 @@ export class BibliographyExportModal extends Modal {
 	private bibContent: string = "";
 	private sources: any[] = [];
 	private settings: BibliographySettings;
+	private sourceService: SourceService;
 
 	constructor(app: App, settings: BibliographySettings) {
 		super(app);
 		this.settings = settings;
+		this.sourceService = new SourceService(app);
 	}
 
 	async onOpen() {
@@ -168,13 +171,35 @@ export class BibliographyExportModal extends Modal {
 
 	private async loadSources(scope: string) {
 		try {
-			// Implementation would go here to load sources from vault or current document
-			// For now, placeholder
-			this.sources = [];
-			this.bibContent = "% No sources found";
+			console.log(`🔍 Loading sources for bibliography export, scope: ${scope}`);
+
+			if (scope === "vault") {
+				// Use sources folder from settings
+				const sourcesFolder = this.settings.sourcesFolder;
+				console.log(`📂 Using sources folder: ${sourcesFolder}`);
+
+				const sourceFiles = await this.sourceService.findAllSourceFiles(sourcesFolder);
+				console.log(`📄 Found ${sourceFiles.length} source files`);
+
+				// Generate bibliography based on format
+				const format = this.settings.bibliographyFormat;
+				console.log(`📋 Generating bibliography in format: ${format}`);
+
+				if (format === "hayagriva") {
+					this.bibContent = await this.sourceService.generateHayagrivaFromSources(sourcesFolder);
+				} else {
+					this.bibContent = await this.sourceService.generateBibTeXFromSources(sourcesFolder);
+				}
+
+				console.log(`📊 Generated bibliography content length: ${this.bibContent?.length || 0}`);
+			} else {
+				// Current document scope - would need to extract sources from current file
+				// For now, fall back to vault scope
+				await this.loadSources("vault");
+			}
 		} catch (error) {
 			console.error("Error loading sources:", error);
-			new Notice("Error loading sources");
+			this.bibContent = `% Error: ${error.message}`;
 		}
 	}
 
@@ -191,15 +216,27 @@ export class BibliographyExportModal extends Modal {
 				"hayagriva": ".yaml"
 			};
 			const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
-			const bibPath = this.settings.bibliographyFilename + extension;
+			const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
+			const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
+
+			console.log(`📝 Exporting bibliography to: ${bibPath}`);
+			console.log(`📊 Content length: ${this.bibContent?.length || 0} characters`);
+
+			// Ensure output directory exists
+			const outputDir = outputFolder;
+			if (outputDir && !(await this.app.vault.adapter.exists(outputDir))) {
+				console.log(`📁 Creating output directory: ${outputDir}`);
+				await this.app.vault.adapter.mkdir(outputDir);
+			}
 
 			await this.app.vault.adapter.write(bibPath, this.bibContent);
 
 			new Notice(`Bibliography exported to ${bibPath}`);
+			console.log(`✅ Bibliography successfully exported to ${bibPath}`);
 			this.close();
 		} catch (error) {
 			console.error("Error exporting bibliography:", error);
-			new Notice("Error exporting bibliography");
+			new Notice(`Error exporting bibliography: ${error.message}`);
 		}
 	}
 

@@ -12,6 +12,7 @@ import {
 export interface BibliographySettings {
 	sourcesFolder: string;
 	bibliographyFilename: string;
+	bibliographyOutputFolder: string;
 	bibliographyFormat: "bibtex" | "csl-json" | "hayagriva";
 	autoGenerate: boolean;
 	supportedFileTypes: string[];
@@ -24,6 +25,7 @@ export interface BibliographySettings {
 export const DEFAULT_SETTINGS: BibliographySettings = {
 	sourcesFolder: "sources",
 	bibliographyFilename: "bibliography",
+	bibliographyOutputFolder: "",
 	bibliographyFormat: "bibtex" as const,
 	autoGenerate: false,
 	supportedFileTypes: ["pdf", "epub", "txt"],
@@ -200,6 +202,24 @@ export class BibliographySettingTab extends PluginSettingTab {
 					});
 			});
 
+		// Add bibliography output folder selector
+		new Setting(containerEl)
+			.setName("Bibliography output folder")
+			.setDesc("Folder where bibliography files will be created (leave empty to use sources folder)")
+			.addText((text) => {
+				text
+					.setPlaceholder("sources")
+					.setValue(this.plugin.settings.bibliographyOutputFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.bibliographyOutputFolder = value;
+						await this.plugin.saveSettings();
+						this.updateBibliographyFilenamePreview();
+					});
+
+				// Add folder suggestions
+				new FolderSuggest(this.app, text.inputEl);
+			});
+
 		// Add bibliography format selector
 		new Setting(containerEl)
 			.setName("Bibliography format")
@@ -340,7 +360,8 @@ if (bibPlugin?.api) {
 		};
 
 		const extension = extensionMap[this.plugin.settings.bibliographyFormat as keyof typeof extensionMap] || ".bib";
-		const fullFilename = this.plugin.settings.bibliographyFilename + extension;
+		const outputFolder = this.plugin.settings.bibliographyOutputFolder || this.plugin.settings.sourcesFolder;
+		const fullFilename = `${outputFolder}/${this.plugin.settings.bibliographyFilename}${extension}`;
 		this.filenamePreviewValue.textContent = fullFilename;
 	}
 }
