@@ -1,5 +1,6 @@
 import { App, Plugin, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
+require('@citation-js/plugin-hayagriva');
 import { SourceService } from "./utils/sourceService";
 import { SourceData, setCrossrefUserAgent } from "./utils/sourceManager";
 import { getBibliographyCommands } from "./utils/bibliographyCommands";
@@ -17,6 +18,7 @@ export interface BibliographyAPI {
 		sourcesFolder?: string;
 		bibliographyFile?: string;
 		includeFiles?: string[];
+		format?: "bibtex" | "csl-json" | "hayagriva";
 	}): Promise<string>;
 
 	/**
@@ -25,7 +27,7 @@ export interface BibliographyAPI {
 	exportBibliographyToPath(config: {
 		sourcesFolder?: string;
 		outputPath: string;
-		format?: "bibtex" | "csl-json";
+		format?: "bibtex" | "csl-json" | "hayagriva";
 	}): Promise<string>;
 
 	/**
@@ -111,6 +113,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+
 		// Update User-Agent for Crossref API if email changed
 		setCrossrefUserAgent(this.settings.crossrefEmail, true);
 		// Update services with new settings
@@ -143,7 +146,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 					console.log(
 						`Loaded template from file: ${this.settings.templateFile}`
 					);
-				} else {
+									} else {
 					console.warn(
 						`Template file not found: ${this.settings.templateFile}`
 					);
@@ -162,15 +165,31 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	private createAPI(): BibliographyAPI {
 		return {
-			// Generate BibTeX content from sources
+			// Generate bibliography content from sources
 			generateBibliography: async (config = {}) => {
 				try {
 					const sourcesFolder =
 						config.sourcesFolder || this.settings.sourcesFolder;
-					const bibContent =
-						await this.sourceService.generateBibTeXFromSources(
-							sourcesFolder
-						);
+					const format = config.format || this.settings.bibliographyFormat;
+
+					let bibContent;
+					if (format === "hayagriva") {
+						bibContent =
+							await this.sourceService.generateHayagrivaFromSources(
+								sourcesFolder
+							);
+					} else if (format === "csl-json") {
+						// For now, fall back to BibTeX for CSL-JSON until we implement proper CSL-JSON generation
+						bibContent =
+							await this.sourceService.generateBibTeXFromSources(
+								sourcesFolder
+							);
+					} else {
+						bibContent =
+							await this.sourceService.generateBibTeXFromSources(
+								sourcesFolder
+							);
+					}
 
 					if (!bibContent || bibContent.trim() === "") {
 						throw new Error(
@@ -178,7 +197,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 						);
 					}
 
-					console.log(`Generated bibliography from ${sourcesFolder}`);
+					console.log(`Generated ${format} bibliography from ${sourcesFolder}`);
 					return bibContent;
 				} catch (error) {
 					console.error("Failed to generate bibliography:", error);
@@ -191,24 +210,43 @@ export default class BibliographyManagerPlugin extends Plugin {
 				try {
 					const sourcesFolder =
 						config.sourcesFolder || this.settings.sourcesFolder;
-					const bibContent =
-						await this.sourceService.generateBibTeXFromSources(
-							sourcesFolder
-						);
+
+					let bibContent;
+					const format = config.format || this.settings.bibliographyFormat;
+					console.log(`🔧 Exporting bibliography in format: ${format}`);
+
+					if (format === "hayagriva") {
+						bibContent =
+							await this.sourceService.generateHayagrivaFromSources(
+								sourcesFolder
+							);
+					} else {
+						bibContent =
+							await this.sourceService.generateBibTeXFromSources(
+								sourcesFolder
+							);
+					}
+
+					console.log(`📊 Generated content length: ${bibContent?.length || 0} characters`);
+					console.log(`📝 Writing to path: ${config.outputPath}`);
 
 					// Ensure output directory exists
 					const outputDir = config.outputPath.substring(
 						0,
 						config.outputPath.lastIndexOf("/")
 					);
+					console.log(`📁 Output directory: ${outputDir}`);
+
 					if (
 						outputDir &&
 						!(await this.app.vault.adapter.exists(outputDir))
 					) {
+						console.log(`📁 Creating directory: ${outputDir}`);
 						await this.app.vault.adapter.mkdir(outputDir);
 					}
 
 					// Write bibliography file
+					console.log(`✍️ Writing bibliography file...`);
 					await this.app.vault.adapter.write(
 						config.outputPath,
 						bibContent
@@ -328,7 +366,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 		const commands = getBibliographyCommands(
 			this.app,
 			false,
-			this.settings
+			this.settings,
+			this
 		);
 
 		commands.forEach((command) => {
@@ -358,9 +397,18 @@ export default class BibliographyManagerPlugin extends Plugin {
 			name: "Generate bibliography file",
 			callback: async () => {
 				try {
-					const bibPath = `${this.settings.sourcesFolder}/${this.settings.bibliographyFilename}`;
+					// Generate full filename with extension based on format
+					const extensionMap = {
+						"bibtex": ".bib",
+						"csl-json": ".json",
+						"hayagriva": ".yaml"
+					};
+					const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
+					const bibPath = `${this.settings.sourcesFolder}/${this.settings.bibliographyFilename}${extension}`;
+
 					await this.api.exportBibliographyToPath({
 						outputPath: bibPath,
+						format: this.settings.bibliographyFormat
 					});
 				} catch (error) {
 					new Notice(

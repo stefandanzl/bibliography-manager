@@ -89,8 +89,14 @@ export class BibliographyExporter {
 		config: BibliographyConfig,
 		outputDir: string
 	): Promise<string> {
-		const bibFilename =
-			this.settings.bibliographyFilename || "bibliography.bib";
+		// Generate full filename with extension based on format
+		const extensionMap = {
+			"bibtex": ".bib",
+			"csl-json": ".json",
+			"hayagriva": ".yaml"
+		};
+		const extension = extensionMap[this.settings.bibliographyFormat as keyof typeof extensionMap] || ".bib";
+		const bibFilename = this.settings.bibliographyFilename + extension;
 
 		if (config.mode === "file") {
 			return this.copyExistingBibFile(
@@ -444,8 +450,25 @@ export class BibliographyExporter {
 }
 
 export class CitekeyGenerator {
-	static generateCitekey(authors: string[], year: number): string {
-		if (authors.length === 0) return "Unknown" + year.toString().slice(-2);
+	static generateCitekey(authors: string[], year: number, title?: string): string {
+		if (authors.length === 0) {
+			// If no authors, use first 5 letters from title
+			if (title && title.trim().length > 0) {
+				const cleanTitle = title
+					.replace(/<[^>]*>/g, "") // Remove HTML
+					.replace(/&[^;]+;/g, "") // Remove HTML entities
+					.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX
+					.replace(/[{}$]/g, "") // Remove math symbols
+					.replace(/[,:;]/g, " ") // Replace punctuation
+					.replace(/[—–]/g, "-") // Replace dashes
+					.replace(/[<>:"/\\|?*]/g, "") // Remove invalid chars
+					.trim();
+				const titleBase = cleanTitle.substring(0, 5).toLowerCase();
+				return titleBase.charAt(0).toUpperCase() + titleBase.substring(1) + year.toString().slice(-2);
+			} else {
+				return "Unknown" + year.toString().slice(-2);
+			}
+		}
 
 		const yearSuffix = year.toString().slice(-2);
 
@@ -488,7 +511,7 @@ export class CitekeyGenerator {
 		authors: string[],
 		year: number
 	): string {
-		const citekey = this.generateCitekey(authors, year);
+		const citekey = this.generateCitekey(authors, year, title);
 		return citekey;
 	}
 
@@ -501,14 +524,12 @@ export class CitekeyGenerator {
 			// Remove common LaTeX formatting
 			.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX commands like \textit{}
 			.replace(/[{}$]/g, "") // Remove remaining LaTeX braces and math symbols
-			// Replace common punctuation with hyphens or spaces
+			// Replace common punctuation with spaces (preserve spaces)
 			.replace(/[,:;]/g, " ")
 			.replace(/[—–]/g, "-") // Replace different types of dashes
 			// Remove invalid filename characters
 			.replace(/[<>:"/\\|?*]/g, "")
-			// Replace multiple spaces/hyphens with single ones
-			.replace(/[\s-]+/g, "-")
-			// Remove leading/trailing hyphens
+			// Remove leading/trailing hyphens but keep spaces
 			.replace(/^-+|-+$/g, "")
 			.trim();
 	}
@@ -522,18 +543,13 @@ export class SourceImporter {
 	) {}
 
 	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
-		console.log('🚀 DEBUG: createSourceFile called');
-		console.log('📋 Source data input:', JSON.stringify(sourceData, null, 2));
-		console.log('🗂️ Media type:', mediaType);
-		console.log('📁 Sources folder:', this.sourcesFolder);
-
+	
 		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
 			sourceData.title,
 			sourceData.author || [],
 			sourceData.year
 		);
-		console.log('🔑 Generated citekey:', citekey);
-
+		
 		// Create readable filename from title
 		const filename =
 			CitekeyGenerator.sanitizeFilename(sourceData.title) + ".md";
@@ -544,27 +560,17 @@ export class SourceImporter {
 				: `${this.sourcesFolder}/${mediaType}`;
 
 		const filePath = `${targetFolder}/${filename}`;
-		console.log('📄 Target file path:', filePath);
-
+		
 		// Ensure directory exists
 		await this.ensureDirectoryExists(targetFolder);
 
-		// Log template decision
-		console.log('📝 Template decision check:', {
-			hasTemplate: !!this.template,
-			templateLength: this.template?.length || 0,
-			templatePreview: this.template?.substring(0, 50),
-			willUseTemplate: (this.template && this.template.trim())
-		});
-
+		
 		// Use template if available, otherwise fall back to default markdown generation
 		const content = (this.template && this.template.trim())
 			? this.generateSourceFromTemplate({ ...sourceData, citekey })
 			: this.generateSourceMarkdown({ ...sourceData, citekey });
 
-		console.log('✅ Content generated, length:', content.length);
-		console.log('📄 Content preview (first 200 chars):', content.substring(0, 200));
-
+		
 		// Create file in vault
 		const newFile = await this.app.vault.create(filePath, content);
 
@@ -625,48 +631,35 @@ ${source.abstract || "<!-- Add abstract here -->"}
 	}
 
 	private generateSourceFromTemplate(source: any): string {
-		console.log('🚀 DEBUG: generateSourceFromTemplate called');
-		console.log('📋 Source data:', JSON.stringify(source, null, 2));
-
 		// Create template data object with direct field access
 		const templateData: Record<string, any> = {};
-		console.log('📄 Raw template content:', JSON.stringify(this.template, null, 2));
 
 		// Direct field mapping - template variables match source data fields
 		Object.keys(source).forEach(field => {
 			const value = source[field];
-			console.log(`📝 Processing field "${field}":`, JSON.stringify(value, null, 2));
 
 			if (value !== undefined && value !== null) {
 				// Handle special formatting for certain fields
 				if (field === 'atcitekey') {
 					// Special handling for atcitekey - prepend @ symbol
 					templateData[field] = `@${value}`;
-					console.log(`✅ Special handling for atcitekey: "${templateData[field]}"`);
 				} else if (Array.isArray(value)) {
 					// For arrays, provide both array version (for other uses) and pre-formatted YAML array string
 					templateData[field] = value;  // Keep as array for other uses
 					// Format array as YAML array string without using it as object key
 					templateData[field + 'Array'] = this.formatYamlArray(value);  // Pre-formatted YAML array
-					console.log(`✅ Array set for "${field}":`, templateData[field]);
-					console.log(`✅ Pre-formatted array for "${field}Array":`, templateData[field + 'Array']);
 				} else if (typeof value === 'string') {
 					templateData[field] = value;
-					console.log(`✅ String set for "${field}": "${templateData[field]}"`);
 				} else {
 					templateData[field] = String(value);
-					console.log(`✅ Converted to string for "${field}": "${templateData[field]}"`);
 				}
 			} else {
 				// Set empty arrays for fields that should be arrays, empty strings for others
 				if (field === 'author' || field === 'keywords') {
 					templateData[field] = [];  // Empty array for YAML
 					templateData[field + 'Array'] = '[]';  // Empty YAML array string
-					console.log(`⚠️ Empty array set for "${field}"`);
-					console.log(`⚠️ Empty array string for "${field}Array"`);
 				} else {
 					templateData[field] = '';
-					console.log(`⚠️ Empty value set for "${field}"`);
 				}
 			}
 		});
@@ -675,86 +668,55 @@ ${source.abstract || "<!-- Add abstract here -->"}
 		templateData.authorList = Array.isArray(source.author)
 			? source.author.join(', ')
 			: source.author || '';
-		console.log('📚 Author list helper:', templateData.authorList);
 
 		// Add sanitized filename for use in templates
 		templateData.filename = CitekeyGenerator.sanitizeFilename(source.title);
-		console.log('📄 Sanitized filename:', templateData.filename);
+		// Add atcitekey for aliases (citekey with @ prefix)
+		if (source.citekey) {
+			templateData.atcitekey = `@${source.citekey}`;
+		}
 
 		console.log('📊 Final template data:', JSON.stringify(templateData, null, 2));
 
 		// Render the template
 		try {
 			const templateToRender = this.template || '';
-			console.log('🎨 Template to render (first 200 chars):', templateToRender.substring(0, 200));
-			console.log('📏 Template length:', templateToRender.length);
 
 			if (!templateToRender.trim()) {
-				console.warn('⚠️ Template is empty, falling back to default markdown generation');
 				return this.generateSourceMarkdown(source);
 			}
 
-			// Debug: Log all array-type fields that might cause issues
-			console.log('🔍 DEBUG ARRAY FIELDS BEFORE RENDER:');
-			Object.entries(templateData).forEach(([key, value]) => {
-				if (Array.isArray(value)) {
-					console.log(`  Array field "${key}":`, value);
-					console.log(`  Array "${key}" length:`, value.length);
-				} else if (key === 'keywords') {
-					console.log(`  Keywords field "${key}":`, value, `type:`, typeof value, `isArray:`, Array.isArray(value));
-				}
-			});
-
-			console.log('🔥 About to render template with regex replacement...');
 			const result = this.renderTemplateWithRegex(templateToRender, templateData);
-			console.log('✅ Template rendering successful!');
-			console.log('📄 Rendered result (first 200 chars):', result.substring(0, 200));
 			return result;
 		} catch (error) {
-			console.error('💥 ERROR rendering template:', error);
-			console.error('💥 Error details:', {
-				message: error.message,
-				stack: error.stack,
-				templateLength: this.template?.length || 0,
-				templateStart: this.template?.substring(0, 100) || '',
-				templateDataKeys: Object.keys(templateData)
-			});
-
+			console.error('ERROR rendering template:', error);
 			// Fall back to default markdown generation
-			console.warn('⚠️ Falling back to default markdown generation due to template error');
+			console.warn('Falling back to default markdown generation due to template error');
 			return this.generateSourceMarkdown(source);
 		}
 	}
 
 	private renderTemplateWithRegex(template: string, data: Record<string, any>): string {
-		console.log('🔧 Starting regex template rendering...');
-		console.log('📝 Template input (first 200 chars):', template.substring(0, 200));
-		console.log('📊 Data keys:', Object.keys(data));
-
 		try {
 			let result = template;
 
 			// Replace simple {{variable}} placeholders only
 			result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
 				const trimmedPath = fieldPath.trim();
-				console.log(`🔄 Processing simple variable: "${trimmedPath}"`);
 				try {
 					// Handle nested paths like "data.field"
 					const value = this.getNestedValue(data, trimmedPath);
-					console.log(`✅ Value for "${trimmedPath}":`, value);
 					const resultValue = value !== undefined && value !== null ? String(value) : '';
-					console.log(`📝 Final result for "${trimmedPath}": "${resultValue}"`);
 					return resultValue;
 				} catch (innerError) {
-					console.error(`💥 ERROR processing variable "${trimmedPath}":`, innerError);
+					console.error(`ERROR processing variable "${trimmedPath}":`, innerError);
 					return '';
 				}
 			});
 
-			console.log('✅ Regex template rendering complete');
 			return result;
 		} catch (error) {
-			console.error('💥 CRITICAL ERROR in renderTemplateWithRegex:', error);
+			console.error('CRITICAL ERROR in renderTemplateWithRegex:', error);
 			throw error;
 		}
 	}

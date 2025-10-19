@@ -10,6 +10,7 @@ import {
 } from "obsidian";
 import { BibliographySettings } from "../settings";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
+import BibliographyManagerPlugin from "../main";
 import {
 	testDOIBasic,
 	testDOIFormats,
@@ -97,9 +98,11 @@ export class GenerateCitekeyCommand {
 export class BibliographyExportModal extends Modal {
 	private bibContent: string = "";
 	private sources: any[] = [];
+	private settings: BibliographySettings;
 
-	constructor(app: App) {
+	constructor(app: App, settings: BibliographySettings) {
 		super(app);
+		this.settings = settings;
 	}
 
 	async onOpen() {
@@ -181,8 +184,15 @@ export class BibliographyExportModal extends Modal {
 
 	private async exportBibliography() {
 		try {
-			// Create bibliography file in root
-			const bibPath = "bibliography.bib";
+			// Generate full filename with extension based on format
+			const extensionMap = {
+				"bibtex": ".bib",
+				"csl-json": ".json",
+				"hayagriva": ".yaml"
+			};
+			const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
+			const bibPath = this.settings.bibliographyFilename + extension;
+
 			await this.app.vault.adapter.write(bibPath, this.bibContent);
 
 			new Notice(`Bibliography exported to ${bibPath}`);
@@ -203,10 +213,12 @@ export class SourceImportModal extends Modal {
 	private sourceData: any = {};
 	private mediaType: string = "Paper";
 	private settings: BibliographySettings;
+	private plugin?: BibliographyManagerPlugin;
 
-	constructor(app: App, settings: BibliographySettings) {
+	constructor(app: App, settings: BibliographySettings, plugin?: BibliographyManagerPlugin) {
 		super(app);
 		this.settings = settings;
+		this.plugin = plugin;
 	}
 
 	onOpen() {
@@ -771,11 +783,10 @@ export class SourceImportModal extends Modal {
 
 	private async importSource() {
 		try {
-			console.log('🚀 DEBUG: importSource called');
-			console.log('📋 Source data:', JSON.stringify(this.sourceData, null, 2));
-			console.log('🗂️ Media type:', this.mediaType);
-			console.log('📁 Settings sources folder:', this.settings.sourcesFolder);
-			console.log('📝 Settings template (first 100 chars):', this.settings.sourceNoteTemplate?.substring(0, 100));
+			// Load template file right before using it
+			if (this.plugin) {
+				await this.plugin.loadTemplateFile();
+			}
 
 			const importer = new SourceImporter(
 				this.app,
@@ -786,8 +797,6 @@ export class SourceImportModal extends Modal {
 				this.sourceData,
 				this.mediaType
 			);
-
-			console.log('✅ File created successfully:', newFile.path);
 
 			// Open in new tab
 			await this.app.workspace.getLeaf(true).openFile(newFile);
@@ -1227,7 +1236,8 @@ cite.format('html', { style: 'apa' }, { lang: 'en-US' })`,
 export function getBibliographyCommands(
 	app: App,
 	includeTests: boolean = false,
-	settings: BibliographySettings
+	settings: BibliographySettings,
+	plugin?: BibliographyManagerPlugin
 ) {
 	return [
 		{
@@ -1242,14 +1252,14 @@ export function getBibliographyCommands(
 			id: "export-bibliography-manual",
 			name: "Export bibliography manually",
 			callback: () => {
-				new BibliographyExportModal(app).open();
+				new BibliographyExportModal(app, settings).open();
 			},
 		},
 		{
 			id: "import-source",
 			name: "Import new source",
 			callback: () => {
-				new SourceImportModal(app, settings).open();
+				new SourceImportModal(app, settings, plugin).open();
 			},
 		},
 		{

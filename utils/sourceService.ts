@@ -1,5 +1,6 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
+require('@citation-js/plugin-hayagriva');
 
 export class SourceService {
 	app: App;
@@ -252,6 +253,10 @@ export class SourceService {
 		templateData.authorList = Array.isArray(sourceData.author)
 			? sourceData.author.join(', ')
 			: sourceData.author || '';
+		// Add atcitekey for aliases (citekey with @ prefix)
+		if (sourceData.citekey) {
+			templateData.atcitekey = `@${sourceData.citekey}`;
+		}
 
 		// Simple regex replacement for template variables
 		let result = template;
@@ -411,6 +416,59 @@ export class SourceService {
 	}
 
 	/**
+	 * Generate Hayagriva content from all source files
+	 */
+	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
+		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
+		const hayagrivaEntries: string[] = [];
+		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
+		let duplicatesFound = 0;
+
+		for (const file of sourceFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const frontmatter = cache?.frontmatter;
+
+			if (frontmatter) {
+				const citekey = frontmatter.citekey;
+
+				if (!citekey) {
+					console.warn(`Source file without citekey: ${file.path}`);
+					continue;
+				}
+
+				// Check for duplicates
+				if (seenCitekeys.has(citekey)) {
+					duplicatesFound++;
+					const existing = seenCitekeys.get(citekey)!;
+					console.log(`%cDUPLICATE CITEKEY FOUND: ${citekey}%c\nOriginal: ${existing.file.path}\nDuplicate: ${file.path}`, 'color: #7f6df2; font-weight: bold;', 'color: #7f6df2;');
+
+					// Update count for reporting
+					existing.count++;
+				} else {
+					// First occurrence of this citekey
+					seenCitekeys.set(citekey, { file, count: 1 });
+
+					const hayagrivaEntry = this.convertFrontmatterToHayagriva(frontmatter);
+					if (hayagrivaEntry) {
+						hayagrivaEntries.push(hayagrivaEntry);
+					}
+				}
+			}
+		}
+
+		if (duplicatesFound > 0) {
+			console.warn(
+				`Found ${duplicatesFound} duplicate citekeys during Hayagriva generation`
+			);
+			new Notice(
+				`Found ${duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
+			);
+		}
+
+		return hayagrivaEntries.join("\n\n");
+	}
+
+	/**
 	 * Convert frontmatter data to BibTeX entry
 	 */
 	private convertFrontmatterToBibTeX(frontmatter: any): string | null {
@@ -523,5 +581,129 @@ export class SourceService {
 		});
 
 		return `[${formattedItems.join(', ')}]`;
+	}
+
+	/**
+	 * Convert frontmatter data to Hayagriva entry
+	 */
+	private convertFrontmatterToHayagriva(frontmatter: any): string | null {
+		if (!frontmatter.citekey) {
+			return null;
+		}
+
+		// Map our types to Hayagriva types
+		const hayagrivaType = this.mapToHayagrivaType(
+			frontmatter.bibtype,
+			frontmatter.category?.[0]
+		);
+
+		let entry = `${frontmatter.citekey}:\n`;
+		entry += `  type: ${hayagrivaType}\n`;
+
+		// Add various fields
+		const fields = [
+			["title", frontmatter.title],
+			["author", this.formatAuthorsForHayagriva(frontmatter.author)],
+			["year", frontmatter.year],
+			["publisher", frontmatter.publisher],
+			["journal", frontmatter.journal],
+			["booktitle", frontmatter.booktitle],
+			["doi", frontmatter.doi],
+			["url", frontmatter.url],
+			["isbn", frontmatter.isbn],
+			["issn", frontmatter.issn],
+			["pages", frontmatter.pages],
+			["volume", frontmatter.volume],
+			["number", frontmatter.number],
+			["keywords", frontmatter.keywords],
+			["abstract", frontmatter.abstract],
+			["note", frontmatter.note]
+		];
+
+		for (const [key, value] of fields) {
+			if (value && Array.isArray(value) && value.length > 0) {
+				if (key === 'author' || key === 'keywords') {
+					entry += `  ${key}:\n`;
+					value.forEach((item: any) => {
+						entry += `    - "${item}"\n`;
+					});
+				} else {
+					entry += `  ${key}: ["${value.join('", "')}"]\n`;
+				}
+			} else if (value && !Array.isArray(value) && value.toString().trim() !== '') {
+				if (typeof value === 'string') {
+					// Don't quote numbers and boolean values
+					entry += `  ${key}: "${value.replace(/"/g, '\\"')}"\n`;
+				} else {
+					entry += `  ${key}: ${value}\n`;
+				}
+			}
+		}
+
+		return entry;
+	}
+
+	/**
+	 * Map our custom types to Hayagriva types
+	 */
+	private mapToHayagrivaType(bibtype?: string, category?: string): string {
+		const typeMap: Record<string, string> = {
+			"article": "Article",
+			"journal": "Article",
+			"book": "Book",
+			"booklet": "Book",
+			"conference": "Conference",
+			"inbook": "Chapter",
+			"incollection": "Chapter",
+			"inproceedings": "Conference",
+			"manual": "Misc",
+			"mastersthesis": "Thesis",
+			"phdthesis": "Thesis",
+			"proceedings": "Book",
+			"techreport": "Report",
+			"unpublished": "Misc",
+			"webpage": "Web",
+			"website": "Web",
+			"online": "Web",
+			"report": "Report",
+			"thesis": "Thesis",
+			"chapter": "Chapter",
+			"collection": "Anthos",
+			"misc": "Misc"
+		};
+
+		if (bibtype && typeMap[bibtype.toLowerCase()]) {
+			return typeMap[bibtype.toLowerCase()];
+		}
+
+		// Fallback to category or default to Misc
+		if (category && typeMap[category.toLowerCase()]) {
+			return typeMap[category.toLowerCase()];
+		}
+
+		return "Misc";
+	}
+
+	/**
+	 * Format authors for Hayagriva
+	 */
+	private formatAuthorsForHayagriva(authors: any[]): string[] {
+		if (!authors || !Array.isArray(authors)) {
+			return [];
+		}
+
+		return authors.map(author => {
+			if (typeof author === 'string') {
+				return author;
+			}
+
+			// Handle author objects with family/given names
+			if (author.family && author.given) {
+				return `${author.family}, ${author.given}`;
+			}
+
+			// Handle other formats
+			return String(author);
+		}).filter(author => author && author.trim() !== '');
 	}
 }

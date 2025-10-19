@@ -12,6 +12,7 @@ import {
 export interface BibliographySettings {
 	sourcesFolder: string;
 	bibliographyFilename: string;
+	bibliographyFormat: "bibtex" | "csl-json" | "hayagriva";
 	autoGenerate: boolean;
 	supportedFileTypes: string[];
 	crossrefEmail: string;
@@ -22,7 +23,8 @@ export interface BibliographySettings {
 // Default settings
 export const DEFAULT_SETTINGS: BibliographySettings = {
 	sourcesFolder: "sources",
-	bibliographyFilename: "bibliography.bib",
+	bibliographyFilename: "bibliography",
+	bibliographyFormat: "bibtex" as const,
 	autoGenerate: false,
 	supportedFileTypes: ["pdf", "epub", "txt"],
 	crossrefEmail: "",
@@ -156,6 +158,7 @@ class TemplateFileSuggest extends AbstractInputSuggest<string> {
 
 export class BibliographySettingTab extends PluginSettingTab {
 	plugin: BibliographyManagerPlugin; // Using any to avoid circular dependency
+	filenamePreviewValue: HTMLDivElement;
 
 	constructor(app: App, plugin: BibliographyManagerPlugin) {
 		super(app, plugin);
@@ -185,16 +188,71 @@ export class BibliographySettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Bibliography filename")
-			.setDesc("Default filename for generated bibliography files")
-			.addText((text) =>
+			.setDesc("Base filename for generated bibliography files (without extension)")
+			.addText((text) => {
 				text
-					.setPlaceholder("bibliography.bib")
+					.setPlaceholder("bibliography")
 					.setValue(this.plugin.settings.bibliographyFilename)
 					.onChange(async (value) => {
 						this.plugin.settings.bibliographyFilename = value;
 						await this.plugin.saveSettings();
-					})
-			);
+						this.updateBibliographyFilenamePreview();
+					});
+			});
+
+		// Add bibliography format selector
+		new Setting(containerEl)
+			.setName("Bibliography format")
+			.setDesc("Choose the export format for your bibliography")
+			.addDropdown((dropdown) => {
+				dropdown
+					.addOption("bibtex", "BibTeX (.bib)")
+					.addOption("csl-json", "CSL JSON (.json)")
+					.addOption("hayagriva", "Hayagriva (.yaml)")
+					.setValue(this.plugin.settings.bibliographyFormat)
+					.onChange(async (value) => {
+						const oldFormat = this.plugin.settings.bibliographyFormat;
+						this.plugin.settings.bibliographyFormat = value as "bibtex" | "csl-json" | "hayagriva";
+
+						// Show warning about filename extension
+						const extensionMap: Record<string, string> = {
+							"bibtex": ".bib",
+							"csl-json": ".json",
+							"hayagriva": ".yaml"
+						};
+
+						if (oldFormat !== value) {
+							new Notice(
+								`⚠️ Format changed from ${oldFormat} to ${value}. The file extension will be automatically updated to ${extensionMap[value]} when generating bibliography.`
+							);
+						}
+
+						await this.plugin.saveSettings();
+						this.updateBibliographyFilenamePreview();
+					});
+			});
+
+		// Add bibliography filename preview
+		const filenamePreviewDiv = containerEl.createDiv();
+		filenamePreviewDiv.style.marginTop = "10px";
+		filenamePreviewDiv.style.marginBottom = "20px";
+		filenamePreviewDiv.style.padding = "10px";
+		filenamePreviewDiv.style.backgroundColor = "var(--background-secondary)";
+		filenamePreviewDiv.style.borderRadius = "5px";
+		filenamePreviewDiv.style.border = "1px solid var(--background-modifier-border)";
+
+		const previewLabel = filenamePreviewDiv.createEl("div", {
+			text: "Final bibliography filename:",
+			cls: "setting-item-description"
+		});
+
+		const previewValue = filenamePreviewDiv.createEl("div", {
+			cls: "setting-item-name"
+		});
+		previewValue.style.fontWeight = "bold";
+
+		// Store references for updating
+		this.filenamePreviewValue = previewValue;
 
 		new Setting(containerEl)
 			.setName("Auto-generate on export")
@@ -266,5 +324,23 @@ if (bibPlugin?.api) {
   });
 }`,
 		});
+
+		// Initialize filename preview
+		this.updateBibliographyFilenamePreview();
+	}
+
+	/**
+	 * Update the bibliography filename preview based on current settings
+	 */
+	updateBibliographyFilenamePreview(): void {
+		const extensionMap = {
+			"bibtex": ".bib",
+			"csl-json": ".json",
+			"hayagriva": ".yaml"
+		};
+
+		const extension = extensionMap[this.plugin.settings.bibliographyFormat as keyof typeof extensionMap] || ".bib";
+		const fullFilename = this.plugin.settings.bibliographyFilename + extension;
+		this.filenamePreviewValue.textContent = fullFilename;
 	}
 }
