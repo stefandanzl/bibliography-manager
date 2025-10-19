@@ -8,7 +8,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { BibliographySettings } from "../main";
+import { BibliographySettings } from "../settings";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import {
 	testDOIBasic,

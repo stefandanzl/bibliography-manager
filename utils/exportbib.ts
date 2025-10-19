@@ -7,7 +7,7 @@ import {
 	stringifyYaml,
 } from "obsidian";
 import * as Mustache from "mustache";
-import type { BibliographySettings } from "../main";
+import type { BibliographySettings } from "../settings";
 
 // Initialize citation-js properly for browser environment
 let CiteConstructor: any = null;
