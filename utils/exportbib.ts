@@ -6,6 +6,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
+import * as Mustache from "mustache";
 import type { BibliographySettings } from "../main";
 
 // Initialize citation-js properly for browser environment
@@ -500,7 +501,12 @@ export class CitekeyGenerator {
 }
 
 export class SourceImporter {
-	constructor(private app: App) {}
+	constructor(
+		private app: App,
+		private sourcesFolder: string,
+		private template?: string,
+		private fieldMappings?: Record<string, string>
+	) {}
 
 	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
 		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
@@ -512,18 +518,21 @@ export class SourceImporter {
 		// Create readable filename from title
 		const filename =
 			CitekeyGenerator.sanitizeFilename(sourceData.title) + ".md";
-		const sourceFolder = this.app.vault.getAbstractFileByPath("sources");
+		const sourceFolder = this.app.vault.getAbstractFileByPath(this.sourcesFolder);
 		const targetFolder =
 			sourceFolder instanceof TFolder
 				? `${sourceFolder.path}/${mediaType}`
-				: `sources/${mediaType}`;
+				: `${this.sourcesFolder}/${mediaType}`;
 
 		const filePath = `${targetFolder}/${filename}`;
 
 		// Ensure directory exists
 		await this.ensureDirectoryExists(targetFolder);
 
-		const content = this.generateSourceMarkdown({ ...sourceData, citekey });
+		// Use template if available, otherwise fall back to default markdown generation
+		const content = this.template && this.fieldMappings
+			? this.generateSourceFromTemplate({ ...sourceData, citekey })
+			: this.generateSourceMarkdown({ ...sourceData, citekey });
 
 		// Create file in vault
 		const newFile = await this.app.vault.create(filePath, content);
@@ -582,5 +591,45 @@ ${source.abstract || "<!-- Add abstract here -->"}
 ## Notes
 <!-- Your notes and analysis -->
 `;
+	}
+
+	private generateSourceFromTemplate(source: any): string {
+		// Create template data object using field mappings
+		const templateData: Record<string, any> = {};
+
+		if (this.fieldMappings) {
+			// Map template placeholders to actual source data using field mappings
+			Object.entries(this.fieldMappings).forEach(([placeholder, frontmatterField]) => {
+				const value = source[frontmatterField];
+
+				if (value !== undefined && value !== null) {
+					// Handle special formatting for certain field types
+					if (Array.isArray(value)) {
+						// For arrays, keep them as arrays for Mustache to iterate
+						templateData[placeholder] = value;
+					} else if (typeof value === 'string') {
+						templateData[placeholder] = value;
+					} else {
+						templateData[placeholder] = String(value);
+					}
+				} else {
+					templateData[placeholder] = '';
+				}
+			});
+		}
+
+		// Add some helper functions for commonly used formats
+		templateData.authorList = Array.isArray(source.author)
+			? source.author.join(', ')
+			: source.author || '';
+
+		// Render the template
+		try {
+			return Mustache.render(this.template || '', templateData);
+		} catch (error) {
+			console.error('Error rendering template:', error);
+			// Fallback to basic content
+			return this.generateSourceMarkdown(source);
+		}
 	}
 }

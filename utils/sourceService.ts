@@ -1,5 +1,6 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
+import * as Mustache from "mustache";
 
 export class SourceService {
 	app: App;
@@ -33,7 +34,9 @@ export class SourceService {
 	 */
 	async createSourceFile(
 		sourceData: SourceData,
-		sourcesFolder: string
+		sourcesFolder: string,
+		template?: string,
+		fieldMappings?: Record<string, string>
 	): Promise<TFile | null> {
 		try {
 			// Ensure sources folder exists
@@ -49,7 +52,7 @@ export class SourceService {
 			const filePath = normalizePath(`${fullPath}/${filename}.md`);
 
 			// Generate file content
-			const content = this.generateSourceFileContent(sourceData);
+			const content = this.generateSourceFileContent(sourceData, template, fieldMappings);
 
 			// Create file using Obsidian API
 			const file = await this.app.vault.create(filePath, content);
@@ -172,8 +175,17 @@ export class SourceService {
 	/**
 	 * Generate the complete file content with frontmatter and structure
 	 */
-	private generateSourceFileContent(sourceData: SourceData): string {
-		// Start with frontmatter
+	private generateSourceFileContent(
+		sourceData: SourceData,
+		template?: string,
+		fieldMappings?: Record<string, string>
+	): string {
+		// If template is provided, use Mustache rendering
+		if (template && fieldMappings) {
+			return this.renderTemplate(template, sourceData, fieldMappings);
+		}
+
+		// Fallback to original behavior
 		let content = "---\n";
 
 		// Add all fields from sourceData, handling arrays properly
@@ -196,6 +208,82 @@ export class SourceService {
 		// Add basic structure
 		content += "# Inhaltsangabe\n\n";
 		content += "# Zusammenfassung\n\n";
+
+		return content;
+	}
+
+	/**
+	 * Render template using Mustache and field mappings
+	 */
+	private renderTemplate(
+		template: string,
+		sourceData: SourceData,
+		fieldMappings: Record<string, string>
+	): string {
+		// Create template data object using field mappings
+		const templateData: Record<string, any> = {};
+
+		// Map template placeholders to actual source data using field mappings
+		Object.entries(fieldMappings).forEach(([placeholder, frontmatterField]) => {
+			const value = sourceData[frontmatterField as keyof SourceData];
+
+			if (value !== undefined && value !== null) {
+				// Handle special formatting for certain field types
+				if (Array.isArray(value)) {
+					// For arrays, keep them as arrays for Mustache to iterate
+					templateData[placeholder] = value;
+				} else if (typeof value === 'string') {
+					templateData[placeholder] = value;
+				} else {
+					templateData[placeholder] = String(value);
+				}
+			} else {
+				templateData[placeholder] = '';
+			}
+		});
+
+		// Add some helper functions for commonly used formats
+		templateData.authorList = Array.isArray(sourceData.author)
+			? sourceData.author.join(', ')
+			: sourceData.author || '';
+
+		// Render the template
+		try {
+			return Mustache.render(template, templateData);
+		} catch (error) {
+			console.error('Error rendering template:', error);
+			// Fallback to basic content
+			return this.generateBasicSourceContent(sourceData);
+		}
+	}
+
+	/**
+	 * Generate basic source content as fallback
+	 */
+	private generateBasicSourceContent(sourceData: SourceData): string {
+		let content = "---\n";
+		content += `notetype: source\n`;
+		content += `citekey: ${sourceData.citekey || ''}\n`;
+		content += `title: "${sourceData.title || 'Untitled'}"\n`;
+
+		if (sourceData.author && Array.isArray(sourceData.author) && sourceData.author.length > 0) {
+			content += `author: ${JSON.stringify(sourceData.author)}\n`;
+		}
+
+		if (sourceData.year) {
+			content += `year: ${sourceData.year}\n`;
+		}
+
+		if (sourceData.bibtype) {
+			content += `bibtype: ${sourceData.bibtype}\n`;
+		}
+
+		content += "---\n\n";
+		content += `# ${sourceData.title || 'Untitled'}\n\n`;
+
+		if (sourceData.author && Array.isArray(sourceData.author) && sourceData.author.length > 0) {
+			content += `${sourceData.author.join(', ')}\n\n`;
+		}
 
 		return content;
 	}

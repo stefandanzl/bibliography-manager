@@ -1,0 +1,44 @@
+# Field mappings for bibliography templates
+# Format: template-placeholder: frontmatter-property
+# This file maps {{placeholder}} names in templates to actual frontmatter property names
+
+# Core bibliographic fields
+citekey: citekey
+title: title
+author: author
+year: year
+bibtype: bibtype
+
+# Publication details
+doi: doi
+isbn: isbn
+publisher: publisher
+journal: journal
+volume: volume
+number: number
+pages: pages
+
+# URLs and resources
+abstract: abstract
+url: url
+downloadurl: downloadurl
+imageurl: imageurl
+
+# Reading progress and metadata
+added: added
+started: started
+ended: ended
+rating: rating
+currentpage: currentpage
+status: status
+
+# File and reference data
+filelink: filelink
+aliases: aliases
+category: category
+
+# Optional custom mappings (uncomment and modify as needed)
+# Example: Use {{authors}} in template to map to 'author' frontmatter field
+# authors: author
+# publicationYear: year
+# publicationTitle: title

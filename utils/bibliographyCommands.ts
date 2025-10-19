@@ -8,6 +8,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
+import { BibliographySettings } from "../main";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import {
 	testDOIBasic,
@@ -187,9 +188,11 @@ export class BibliographyExportModal extends Modal {
 export class SourceImportModal extends Modal {
 	private sourceData: any = {};
 	private mediaType: string = "Paper";
+	private settings: BibliographySettings;
 
-	constructor(app: App) {
+	constructor(app: App, settings: BibliographySettings) {
 		super(app);
+		this.settings = settings;
 	}
 
 	onOpen() {
@@ -754,7 +757,12 @@ export class SourceImportModal extends Modal {
 
 	private async importSource() {
 		try {
-			const importer = new SourceImporter(this.app);
+			const importer = new SourceImporter(
+			this.app,
+			this.settings.sourcesFolder,
+			this.settings.sourceNoteTemplate,
+			this.settings.fieldMappings
+		);
 			const newFile = await importer.createSourceFile(
 				this.sourceData,
 				this.mediaType
@@ -767,7 +775,15 @@ export class SourceImportModal extends Modal {
 			this.close();
 		} catch (error) {
 			console.error("Error importing source:", error);
-			new Notice("Error importing source");
+			const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+			if (errorMessage.includes("File already exists")) {
+				// Special handling for duplicate files
+				new Notice("⚠️ Duplicate Source Detected\n\nA source file with this citekey already exists. Try importing with a different title or check your sources folder for duplicates.");
+			} else {
+				// Generic error for other issues
+				new Notice(`Error importing source\n\n${errorMessage}`);
+			}
 		}
 	}
 
@@ -1186,10 +1202,11 @@ cite.format('html', { style: 'apa' }, { lang: 'en-US' })`,
 	}
 }
 
-// Command definitions - pass app instance
+// Command definitions - pass app instance and settings
 export function getBibliographyCommands(
 	app: App,
-	includeTests: boolean = false
+	includeTests: boolean = false,
+	settings: BibliographySettings
 ) {
 	return [
 		{
@@ -1211,7 +1228,7 @@ export function getBibliographyCommands(
 			id: "import-source",
 			name: "Import new source",
 			callback: () => {
-				new SourceImportModal(app).open();
+				new SourceImportModal(app, settings).open();
 			},
 		},
 		{

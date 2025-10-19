@@ -1,8 +1,10 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice } from "obsidian";
+import { App, Plugin, PluginSettingTab, Setting, Notice, AbstractInputSuggest } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
 import { SourceService } from "./utils/sourceService";
 import { SourceData, setCrossrefUserAgent } from "./utils/sourceManager";
 import { getBibliographyCommands } from "./utils/bibliographyCommands";
+import * as YAML from "yaml";
+import * as Mustache from "mustache";
 
 // Plugin settings interface
 export interface BibliographySettings {
@@ -11,6 +13,9 @@ export interface BibliographySettings {
 	autoGenerate: boolean;
 	supportedFileTypes: string[];
 	crossrefEmail: string;
+	sourceNoteTemplate: string;
+	templateFile: string;
+	fieldMappings: Record<string, string>;
 	}
 
 // Default settings
@@ -20,6 +25,66 @@ const DEFAULT_SETTINGS: BibliographySettings = {
 	autoGenerate: false,
 	supportedFileTypes: ["pdf", "epub", "txt"],
 	crossrefEmail: "",
+	sourceNoteTemplate: `---
+notetype: source
+citekey: {{citekey}}
+title: "{{title}}"
+author: [{{#author}}{{.}}{{#unless @last}}, {{/unless}}{{/author}}]
+year: {{year}}
+bibtype: {{bibtype}}
+{{#doi}}doi: {{doi}}{{/doi}}
+{{#isbn}}isbn: {{isbn}}{{/isbn}}
+{{#publisher}}publisher: {{publisher}}{{/isbn}}
+{{#journal}}journal: {{journal}}{{/journal}}
+{{#volume}}volume: {{volume}}{{/journal}}
+{{#number}}number: {{number}}{{/journal}}
+{{#pages}}pages: {{pages}}{{/journal}}
+{{#abstract}}abstract: {{abstract}}{{/doi}}
+{{#url}}url: {{url}}{{/url}}
+{{#downloadurl}}downloadurl: {{downloadurl}}{{/url}}
+{{#imageurl}}imageurl: {{imageurl}}{{/url}}
+---
+
+# {{title}}
+
+{{#author}}{{.}}{{#unless @last}}, {{/unless}}{{/author}} ({{year}})
+
+{{#abstract}}
+## Abstract
+{{abstract}}
+{{/abstract}}
+
+{{#doi}}DOI: {{doi}}{{/doi}}
+{{#url}}URL: {{url}}{{/url}}
+`,
+	templateFile: "",
+	fieldMappings: {
+		citekey: "citekey",
+		title: "title",
+		author: "author",
+		year: "year",
+		bibtype: "bibtype",
+		doi: "doi",
+		isbn: "isbn",
+		publisher: "publisher",
+		journal: "journal",
+		volume: "volume",
+		number: "number",
+		pages: "pages",
+		abstract: "abstract",
+		url: "url",
+		downloadurl: "downloadurl",
+		imageurl: "imageurl",
+		added: "added",
+		started: "started",
+		ended: "ended",
+		rating: "rating",
+		currentpage: "currentpage",
+		status: "status",
+		filelink: "filelink",
+		aliases: "aliases",
+		category: "category",
+	},
 	};
 
 // API interface that other plugins can use
@@ -121,6 +186,9 @@ export default class BibliographyManagerPlugin extends Plugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
+
+		// Load field mappings from YAML file
+		await this.loadFieldMappings();
 	}
 
 	async saveSettings() {
@@ -132,6 +200,111 @@ export default class BibliographyManagerPlugin extends Plugin {
 			this.app,
 			this.settings
 		);
+	}
+
+	private async loadFieldMappings(): Promise<void> {
+		try {
+			const mappingsPath = `${this.manifest.dir}/mappings.yaml`;
+			const fileExists = await this.app.vault.adapter.exists(mappingsPath);
+
+			if (fileExists) {
+				const mappingsContent = await this.app.vault.adapter.read(mappingsPath);
+				const parsedMappings = YAML.parse(mappingsContent) as Record<string, string>;
+
+				// Merge with defaults, keeping user customizations
+				this.settings.fieldMappings = {
+					...DEFAULT_SETTINGS.fieldMappings,
+					...parsedMappings
+				};
+
+				console.log("Loaded field mappings from YAML file");
+			} else {
+				// Create default YAML file if it doesn't exist
+				await this.createDefaultMappingsFile();
+				console.log("Created default mappings.yaml file");
+			}
+
+			// Load template file if specified
+			await this.loadTemplateFile();
+		} catch (error) {
+			console.error("Error loading field mappings:", error);
+			// Fall back to default mappings
+			this.settings.fieldMappings = DEFAULT_SETTINGS.fieldMappings;
+		}
+	}
+
+	public async loadTemplateFile(): Promise<void> {
+		try {
+			if (this.settings.templateFile && this.settings.templateFile.trim() !== "") {
+				const templateExists = await this.app.vault.adapter.exists(this.settings.templateFile);
+
+				if (templateExists) {
+					const templateContent = await this.app.vault.adapter.read(this.settings.templateFile);
+					this.settings.sourceNoteTemplate = templateContent;
+					console.log(`Loaded template from file: ${this.settings.templateFile}`);
+				} else {
+					console.warn(`Template file not found: ${this.settings.templateFile}`);
+				}
+			}
+		} catch (error) {
+			console.error("Error loading template file:", error);
+			// Fall back to default template
+			this.settings.sourceNoteTemplate = DEFAULT_SETTINGS.sourceNoteTemplate;
+		}
+	}
+
+	private async createDefaultMappingsFile(): Promise<void> {
+		try {
+			const mappingsPath = `${this.manifest.dir}/mappings.yaml`;
+			const defaultMappingsContent = `# Field mappings for bibliography templates
+# Format: template-placeholder: frontmatter-property
+# This file maps {{placeholder}} names in templates to actual frontmatter property names
+
+# Core bibliographic fields
+citekey: citekey
+title: title
+author: author
+year: year
+bibtype: bibtype
+
+# Publication details
+doi: doi
+isbn: isbn
+publisher: publisher
+journal: journal
+volume: volume
+number: number
+pages: pages
+
+# URLs and resources
+abstract: abstract
+url: url
+downloadurl: downloadurl
+imageurl: imageurl
+
+# Reading progress and metadata
+added: added
+started: started
+ended: ended
+rating: rating
+currentpage: currentpage
+status: status
+
+# File and reference data
+filelink: filelink
+aliases: aliases
+category: category
+
+# Optional custom mappings (uncomment and modify as needed)
+# Example: Use {{authors}} in template to map to 'author' frontmatter field
+# authors: author
+# publicationYear: year
+# publicationTitle: title
+`;
+			await this.app.vault.create(mappingsPath, defaultMappingsContent);
+		} catch (error) {
+			console.error("Error creating default mappings file:", error);
+		}
 	}
 
 	private createAPI(): BibliographyAPI {
@@ -258,7 +431,9 @@ export default class BibliographyManagerPlugin extends Plugin {
 					const sourcesFolder = this.settings.sourcesFolder;
 					const newFile = await this.sourceService.createSourceFile(
 						sourceData as SourceData,
-						sourcesFolder
+						sourcesFolder,
+						this.settings.sourceNoteTemplate,
+						this.settings.fieldMappings
 					);
 
 					if (newFile) {
@@ -299,7 +474,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	private registerCommands() {
 		// NOTE: Integration tests - change 'false' to 'true' to enable testing commands
-		const commands = getBibliographyCommands(this.app, false);
+		const commands = getBibliographyCommands(this.app, false, this.settings);
 
 		commands.forEach((command) => {
 			this.addCommand(command);
@@ -377,6 +552,81 @@ export default class BibliographyManagerPlugin extends Plugin {
 	}
 }
 
+// Folder suggestion class for autocompleting folder paths
+class FolderSuggest extends AbstractInputSuggest<string> {
+	private folders: string[];
+
+	constructor(app: App, private inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		// Get all folders and include root folder
+		this.folders = [""].concat(this.app.vault.getAllFolders().map(folder => folder.path));
+	}
+
+	getSuggestions(inputStr: string): string[] {
+		const inputLower = inputStr.toLowerCase();
+		return this.folders.filter(folder =>
+			folder.toLowerCase().includes(inputLower)
+		);
+	}
+
+	renderSuggestion(folder: string, el: HTMLElement): void {
+		el.createEl("div", { text: folder || "/" });
+	}
+
+	selectSuggestion(folder: string, evt: MouseEvent | KeyboardEvent): void {
+		this.inputEl.value = folder;
+		this.inputEl.dispatchEvent(new Event('input'));
+		this.close();
+	}
+}
+
+// Template file suggestion class for autocompleting template files
+class TemplateFileSuggest extends AbstractInputSuggest<string> {
+	private templateFiles: string[];
+
+	constructor(app: App, private inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.templateFiles = this.getTemplateFiles();
+	}
+
+	private getTemplateFiles(): string[] {
+		const files: string[] = [];
+
+		// Get markdown files from all directories
+		this.app.vault.getFiles().forEach(file => {
+			if (file.extension === "md") {
+				// Add files with common template-related names
+				const filename = file.basename.toLowerCase();
+				if (filename.includes("template") ||
+					filename.includes("sourcenote") ||
+					filename.includes("bibliography") ||
+					filename.includes("note")) {
+					files.push(file.path);
+				}
+			}
+		});
+
+		return files.sort();
+	}
+
+	getSuggestions(inputStr: string): string[] {
+		const inputLower = inputStr.toLowerCase();
+		return this.templateFiles.filter(file =>
+			file.toLowerCase().includes(inputLower)
+		);
+	}
+
+	renderSuggestion(filePath: string, el: HTMLElement): void {
+		el.createEl("div", { text: filePath });
+	}
+
+	selectSuggestion(filePath: string, evt: MouseEvent | KeyboardEvent): void {
+		this.inputEl.value = filePath;
+		this.inputEl.dispatchEvent(new Event('input'));
+		this.close();
+	}
+}
+
 class BibliographySettingTab extends PluginSettingTab {
 	plugin: BibliographyManagerPlugin;
 
@@ -394,15 +644,18 @@ class BibliographySettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Sources folder")
 			.setDesc("Folder where source files are stored")
-			.addText((text) =>
-				text
+			.addSearch((search) => {
+				search
 					.setPlaceholder("sources")
 					.setValue(this.plugin.settings.sourcesFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.sourcesFolder = value;
 						await this.plugin.saveSettings();
-					})
-			);
+					});
+
+				// Add folder suggestions
+				new FolderSuggest(this.app, search.inputEl);
+			});
 
 		new Setting(containerEl)
 			.setName("Bibliography filename")
@@ -445,6 +698,83 @@ class BibliographySettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		containerEl.createEl("h3", { text: "Source Note Template" });
+
+		new Setting(containerEl)
+			.setName("Template file")
+			.setDesc("Load template from a markdown file instead of using the embedded template")
+			.addSearch((search) => {
+				search
+					.setPlaceholder("templates/source-note.md")
+					.setValue(this.plugin.settings.templateFile)
+					.onChange(async (value) => {
+						this.plugin.settings.templateFile = value;
+						await this.plugin.saveSettings();
+						// Reload template if file is specified
+						await this.plugin.loadTemplateFile();
+					});
+
+				// Add template file suggestions
+				new TemplateFileSuggest(this.app, search.inputEl);
+			});
+
+		new Setting(containerEl)
+			.setName("Note template")
+			.setDesc("Template for creating new source notes using Mustache syntax. Available placeholders: {{citekey}}, {{title}}, {{author}}, {{year}}, etc.")
+			.addTextArea((text) => {
+				text
+					.setValue(this.plugin.settings.sourceNoteTemplate)
+					.setPlaceholder("Enter your template here...")
+					.onChange(async (value) => {
+						this.plugin.settings.sourceNoteTemplate = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.style.width = "100%";
+				text.inputEl.style.minHeight = "150px";
+			});
+
+		containerEl.createEl("p", {
+			text: "Template placeholders are mapped to frontmatter fields using the mappings.yaml file in your plugin folder.",
+			cls: "setting-item-description",
+		});
+
+		containerEl.createEl("h4", { text: "Available Placeholders" });
+		const placeholdersInfo = containerEl.createDiv({ cls: "setting-item-description" });
+		placeholdersInfo.innerHTML = `
+			<strong>Core fields:</strong> {{citekey}}, {{title}}, {{author}}, {{year}}, {{bibtype}}<br>
+			<strong>Publication details:</strong> {{doi}}, {{isbn}}, {{publisher}}, {{journal}}, {{volume}}, {{number}}, {{pages}}<br>
+			<strong>Content:</strong> {{abstract}}, {{url}}, {{downloadurl}}, {{imageurl}}<br>
+			<strong>Reading progress:</strong> {{added}}, {{started}}, {{ended}}, {{rating}}, {{currentpage}}, {{status}}<br>
+			<strong>File data:</strong> {{filelink}}, {{aliases}}, {{category}}
+		`;
+
+		containerEl.createEl("p", {
+			text: "You can customize the mappings by editing the mappings.yaml file in your plugin folder.",
+			cls: "setting-item-description",
+		});
+
+		new Setting(containerEl)
+			.setName("Open field mappings file")
+			.setDesc("Edit the YAML file that maps template placeholders to frontmatter fields")
+			.addButton((button) => {
+				button
+					.setButtonText("Open")
+					.setCta()
+					.onClick(async () => {
+						try {
+							const mappingsPath = `${this.plugin.manifest.dir}/mappings.yaml`;
+							const file = this.plugin.app.vault.getAbstractFileByPath(mappingsPath);
+							if (file) {
+								await this.plugin.app.workspace.getLeaf(true).openFile(file as any);
+							} else {
+								new Notice("Field mappings file not found. It will be created automatically.");
+							}
+						} catch (error) {
+							new Notice("Error opening field mappings file.");
+						}
+					});
+			});
 
 		containerEl.createEl("h3", { text: "API Usage" });
 
