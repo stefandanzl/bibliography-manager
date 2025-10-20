@@ -18,7 +18,7 @@ import { Cite } from "@citation-js/core";
 import "@citation-js/plugin-doi";
 import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
-import "@citation-js/plugin-wikidata";
+// Note: wikidata plugin removed to save 2.5MB bundle size
 
 export class GenerateCitekeyCommand {
 	constructor(private app: App) {}

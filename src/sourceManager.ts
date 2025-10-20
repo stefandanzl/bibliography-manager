@@ -9,7 +9,7 @@ import { Cite, util } from "@citation-js/core";
 import "@citation-js/plugin-doi";
 import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
-import "@citation-js/plugin-wikidata";
+// Note: wikidata plugin removed to save 2.5MB bundle size
 
 // Set User-Agent for Crossref API if email is provided
 export function setCrossrefUserAgent(email: string, showNotifications: boolean = true) {
