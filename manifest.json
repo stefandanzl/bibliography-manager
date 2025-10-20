@@ -1,7 +1,7 @@
 {
 	"id": "bibliography-manager",
 	"name": "Bibliography Manager",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"minAppVersion": "1.10.0",
 	"description": "Manage bibliographies and sources with BibTeX export, DOI/ISBN lookup, and API for other plugins",
 	"author": "Stefan Danzl",
