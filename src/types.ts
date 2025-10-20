@@ -41,13 +41,35 @@ export interface SourceData {
 	issue?: string;
 }
 
-export type SourceType = "book" | "paper" | "website" | "thesis" | "report" | "other";
+export type SourceType =
+	| "book"
+	| "paper"
+	| "website"
+	| "thesis"
+	| "report"
+	| "other";
 export type ImportMethod = "doi" | "isbn" | "url" | "bibtex";
 
 export interface BibliographyConfig {
 	mode: "directory" | "file";
 	path: string;
 }
+
+// Extension→format mapping for API format detection
+export const BIBLIOGRAPHY_FORMAT_MAPPING: Record<string, string> = {
+		".bib": "bibtex",
+	".bibtex": "bibtex",
+	".json": "csl-json",
+	".yaml": "hayagriva",
+	".yml": "hayagriva",
+};
+
+// Simple format→extension mapping for UI code
+export const FORMAT_EXTENSION_MAPPING: Record<string, string> = {
+	bibtex: ".bib",
+	"csl-json": ".json",
+	hayagriva: ".yaml",
+};
 
 export interface BibliographySettings {
 	sourcesFolder: string;

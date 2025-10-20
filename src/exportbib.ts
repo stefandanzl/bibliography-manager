@@ -8,6 +8,7 @@ import {
 } from "obsidian";
 // No Handlebars import - we'll use simple regex replacement
 import type { BibliographySettings } from "./types";
+import { FORMAT_EXTENSION_MAPPING } from "./types";
 
 // Initialize citation-js properly for browser environment
 let CiteConstructor: any = null;
@@ -91,12 +92,9 @@ export class BibliographyExporter {
 		outputDir: string
 	): Promise<string> {
 		// Generate full filename with extension based on format
-		const extensionMap = {
-			"bibtex": ".bib",
-			"csl-json": ".json",
-			"hayagriva": ".yaml"
-		};
-		const extension = extensionMap[this.settings.bibliographyFormat as keyof typeof extensionMap] || ".bib";
+		const extension =
+			FORMAT_EXTENSION_MAPPING[this.settings.bibliographyFormat] ||
+			".bib";
 		const bibFilename = this.settings.bibliographyFilename + extension;
 
 		if (config.mode === "file") {
@@ -451,7 +449,11 @@ export class BibliographyExporter {
 }
 
 export class CitekeyGenerator {
-	static generateCitekey(authors: string[], year: number, title?: string): string {
+	static generateCitekey(
+		authors: string[],
+		year: number,
+		title?: string
+	): string {
 		if (authors.length === 0) {
 			// If no authors, use first 5 letters from title
 			if (title && title.trim().length > 0) {
@@ -465,7 +467,11 @@ export class CitekeyGenerator {
 					.replace(/[<>:"/\\|?*]/g, "") // Remove invalid chars
 					.trim();
 				const titleBase = cleanTitle.substring(0, 5).toLowerCase();
-				return titleBase.charAt(0).toUpperCase() + titleBase.substring(1) + year.toString().slice(-2);
+				return (
+					titleBase.charAt(0).toUpperCase() +
+					titleBase.substring(1) +
+					year.toString().slice(-2)
+				);
 			} else {
 				return "Unknown" + year.toString().slice(-2);
 			}
@@ -488,10 +494,11 @@ export class CitekeyGenerator {
 			const secondAuthor = this.extractLastName(authors[1]);
 			const firstInitial = firstAuthor.substring(0, 2);
 			const secondInitial = secondAuthor.substring(0, 2);
-			const capitalizedBase = (
-				firstInitial.charAt(0).toUpperCase() + firstInitial.substring(1).toLowerCase() +
-				secondInitial.charAt(0).toUpperCase() + secondInitial.substring(1).toLowerCase()
-			);
+			const capitalizedBase =
+				firstInitial.charAt(0).toUpperCase() +
+				firstInitial.substring(1).toLowerCase() +
+				secondInitial.charAt(0).toUpperCase() +
+				secondInitial.substring(1).toLowerCase();
 			return capitalizedBase + yearSuffix;
 		}
 	}
@@ -518,21 +525,23 @@ export class CitekeyGenerator {
 
 	static sanitizeFilename(title: string): string {
 		// Create a clean filename from title
-		return title
-			// Remove HTML/XML tags and entities
-			.replace(/<[^>]*>/g, "")
-			.replace(/&[^;]+;/g, "")
-			// Remove common LaTeX formatting
-			.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX commands like \textit{}
-			.replace(/[{}$]/g, "") // Remove remaining LaTeX braces and math symbols
-			// Replace common punctuation with spaces (preserve spaces)
-			.replace(/[,:;]/g, " ")
-			.replace(/[—–]/g, "-") // Replace different types of dashes
-			// Remove invalid filename characters
-			.replace(/[<>:"/\\|?*]/g, "")
-			// Remove leading/trailing hyphens but keep spaces
-			.replace(/^-+|-+$/g, "")
-			.trim();
+		return (
+			title
+				// Remove HTML/XML tags and entities
+				.replace(/<[^>]*>/g, "")
+				.replace(/&[^;]+;/g, "")
+				// Remove common LaTeX formatting
+				.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX commands like \textit{}
+				.replace(/[{}$]/g, "") // Remove remaining LaTeX braces and math symbols
+				// Replace common punctuation with spaces (preserve spaces)
+				.replace(/[,:;]/g, " ")
+				.replace(/[—–]/g, "-") // Replace different types of dashes
+				// Remove invalid filename characters
+				.replace(/[<>:"/\\|?*]/g, "")
+				// Remove leading/trailing hyphens but keep spaces
+				.replace(/^-+|-+$/g, "")
+				.trim()
+		);
 	}
 
 	/**
@@ -583,34 +592,34 @@ export class SourceImporter {
 	) {}
 
 	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
-	
 		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
 			sourceData.title,
 			sourceData.author || [],
 			sourceData.year
 		);
-		
+
 		// Create readable filename from title
 		const filename =
 			CitekeyGenerator.sanitizeFilename(sourceData.title) + ".md";
-		const sourceFolder = this.app.vault.getAbstractFileByPath(this.sourcesFolder);
+		const sourceFolder = this.app.vault.getAbstractFileByPath(
+			this.sourcesFolder
+		);
 		const targetFolder =
 			sourceFolder instanceof TFolder
 				? `${sourceFolder.path}/${mediaType}`
 				: `${this.sourcesFolder}/${mediaType}`;
 
 		const filePath = `${targetFolder}/${filename}`;
-		
+
 		// Ensure directory exists
 		await this.ensureDirectoryExists(targetFolder);
 
-		
 		// Use template if available, otherwise fall back to default markdown generation
-		const content = (this.template && this.template.trim())
-			? this.generateSourceFromTemplate({ ...sourceData, citekey })
-			: this.generateSourceMarkdown({ ...sourceData, citekey });
+		const content =
+			this.template && this.template.trim()
+				? this.generateSourceFromTemplate({ ...sourceData, citekey })
+				: this.generateSourceMarkdown({ ...sourceData, citekey });
 
-		
 		// Create file in vault
 		const newFile = await this.app.vault.create(filePath, content);
 
@@ -675,39 +684,39 @@ ${source.abstract || "<!-- Add abstract here -->"}
 		const templateData: Record<string, any> = {};
 
 		// Direct field mapping - template variables match source data fields
-		Object.keys(source).forEach(field => {
+		Object.keys(source).forEach((field) => {
 			const value = source[field];
 
 			if (value !== undefined && value !== null) {
 				// Handle special formatting for certain fields
-				if (field === 'atcitekey') {
+				if (field === "atcitekey") {
 					// Special handling for atcitekey - prepend @ symbol
 					templateData[field] = `@${value}`;
 				} else if (Array.isArray(value)) {
 					// For arrays, provide both array version (for other uses) and pre-formatted YAML array string
-					templateData[field] = value;  // Keep as array for other uses
+					templateData[field] = value; // Keep as array for other uses
 					// Format array as YAML array string without using it as object key
-					templateData[field + 'Array'] = this.formatYamlArray(value);  // Pre-formatted YAML array
-				} else if (typeof value === 'string') {
+					templateData[field + "Array"] = this.formatYamlArray(value); // Pre-formatted YAML array
+				} else if (typeof value === "string") {
 					templateData[field] = value;
 				} else {
 					templateData[field] = String(value);
 				}
 			} else {
 				// Set empty arrays for fields that should be arrays, empty strings for others
-				if (field === 'author' || field === 'keywords') {
-					templateData[field] = [];  // Empty array for YAML
-					templateData[field + 'Array'] = '[]';  // Empty YAML array string
+				if (field === "author" || field === "keywords") {
+					templateData[field] = []; // Empty array for YAML
+					templateData[field + "Array"] = "[]"; // Empty YAML array string
 				} else {
-					templateData[field] = '';
+					templateData[field] = "";
 				}
 			}
 		});
 
 		// Add helper fields
 		templateData.authorList = Array.isArray(source.author)
-			? source.author.join(', ')
-			: source.author || '';
+			? source.author.join(", ")
+			: source.author || "";
 
 		// Add sanitized filename for use in templates
 		templateData.filename = CitekeyGenerator.sanitizeFilename(source.title);
@@ -716,27 +725,38 @@ ${source.abstract || "<!-- Add abstract here -->"}
 			templateData.atcitekey = `@${source.citekey}`;
 		}
 
-		console.log('📊 Final template data:', JSON.stringify(templateData, null, 2));
+		console.log(
+			"📊 Final template data:",
+			JSON.stringify(templateData, null, 2)
+		);
 
 		// Render the template
 		try {
-			const templateToRender = this.template || '';
+			const templateToRender = this.template || "";
 
 			if (!templateToRender.trim()) {
 				return this.generateSourceMarkdown(source);
 			}
 
-			const result = this.renderTemplateWithRegex(templateToRender, templateData);
+			const result = this.renderTemplateWithRegex(
+				templateToRender,
+				templateData
+			);
 			return result;
 		} catch (error) {
-			console.error('ERROR rendering template:', error);
+			console.error("ERROR rendering template:", error);
 			// Fall back to default markdown generation
-			console.warn('Falling back to default markdown generation due to template error');
+			console.warn(
+				"Falling back to default markdown generation due to template error"
+			);
 			return this.generateSourceMarkdown(source);
 		}
 	}
 
-	private renderTemplateWithRegex(template: string, data: Record<string, any>): string {
+	private renderTemplateWithRegex(
+		template: string,
+		data: Record<string, any>
+	): string {
 		try {
 			let result = template;
 
@@ -746,37 +766,45 @@ ${source.abstract || "<!-- Add abstract here -->"}
 				try {
 					// Handle nested paths like "data.field"
 					const value = this.getNestedValue(data, trimmedPath);
-					const resultValue = value !== undefined && value !== null ? String(value) : '';
+					const resultValue =
+						value !== undefined && value !== null
+							? String(value)
+							: "";
 					return resultValue;
 				} catch (innerError) {
-					console.error(`ERROR processing variable "${trimmedPath}":`, innerError);
-					return '';
+					console.error(
+						`ERROR processing variable "${trimmedPath}":`,
+						innerError
+					);
+					return "";
 				}
 			});
 
 			return result;
 		} catch (error) {
-			console.error('CRITICAL ERROR in renderTemplateWithRegex:', error);
+			console.error("CRITICAL ERROR in renderTemplateWithRegex:", error);
 			throw error;
 		}
 	}
 
 	private getNestedValue(obj: any, path: string): any {
-		return path.split('.').reduce((current, key) => {
-			return current && current[key] !== undefined ? current[key] : undefined;
+		return path.split(".").reduce((current, key) => {
+			return current && current[key] !== undefined
+				? current[key]
+				: undefined;
 		}, obj);
 	}
 
 	private formatYamlArray(array: any[]): string {
 		if (!array || array.length === 0) {
-			return '[]';
+			return "[]";
 		}
 
 		// Format each element as a YAML string
-		const formattedItems = array.map(item => {
-			if (typeof item === 'string') {
+		const formattedItems = array.map((item) => {
+			if (typeof item === "string") {
 				return `"${item.replace(/"/g, '\\"')}"`;
-			} else if (typeof item === 'number' || typeof item === 'boolean') {
+			} else if (typeof item === "number" || typeof item === "boolean") {
 				return String(item);
 			} else {
 				// For objects or complex types, convert to string
@@ -784,6 +812,6 @@ ${source.abstract || "<!-- Add abstract here -->"}
 			}
 		});
 
-		return `[${formattedItems.join(', ')}]`;
+		return `[${formattedItems.join(", ")}]`;
 	}
 }

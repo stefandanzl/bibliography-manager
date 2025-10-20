@@ -8,7 +8,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { BibliographySettings } from "./types";
+import { BibliographySettings, FORMAT_EXTENSION_MAPPING } from "./types";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "./main";
 import { SourceService } from "./sourceService";
@@ -202,12 +202,7 @@ export class BibliographyExportModal extends Modal {
 	private async exportBibliography() {
 		try {
 			// Generate full filename with extension based on format
-			const extensionMap: Record<string, string> = {
-				"bibtex": ".bib",
-				"csl-json": ".json",
-				"hayagriva": ".yaml"
-			};
-			const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
+			const extension = FORMAT_EXTENSION_MAPPING[this.settings.bibliographyFormat] || ".bib";
 			const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
 			const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
 

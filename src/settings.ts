@@ -7,7 +7,7 @@ import {
 	AbstractInputSuggest,
 	Notice,
 } from "obsidian";
-import { BibliographySettings } from "./types";
+import { BibliographySettings, FORMAT_EXTENSION_MAPPING } from "./types";
 
 // Default settings
 export const DEFAULT_SETTINGS: BibliographySettings = {
@@ -264,15 +264,9 @@ export class BibliographySettingTab extends PluginSettingTab {
 						this.plugin.settings.bibliographyFormat = value as "bibtex" | "csl-json" | "hayagriva";
 
 						// Show warning about filename extension
-						const extensionMap: Record<string, string> = {
-							"bibtex": ".bib",
-							"csl-json": ".json",
-							"hayagriva": ".yaml"
-						};
-
 						if (oldFormat !== value) {
 							new Notice(
-								`⚠️ Format changed from ${oldFormat} to ${value}. The file extension will be automatically updated to ${extensionMap[value]} when generating bibliography.`
+								`⚠️ Format changed from ${oldFormat} to ${value}. The file extension will be automatically updated to ${FORMAT_EXTENSION_MAPPING[value]} when generating bibliography.`
 							);
 						}
 
@@ -476,13 +470,7 @@ if (bibPlugin?.api) {
 	 * Update the bibliography filename preview based on current settings
 	 */
 	updateBibliographyFilenamePreview(): void {
-		const extensionMap = {
-			"bibtex": ".bib",
-			"csl-json": ".json",
-			"hayagriva": ".yaml"
-		};
-
-		const extension = extensionMap[this.plugin.settings.bibliographyFormat as keyof typeof extensionMap] || ".bib";
+		const extension = FORMAT_EXTENSION_MAPPING[this.plugin.settings.bibliographyFormat] || ".bib";
 		const outputFolder = this.plugin.settings.bibliographyOutputFolder || this.plugin.settings.sourcesFolder;
 		const fullFilename = `${outputFolder}/${this.plugin.settings.bibliographyFilename}${extension}`;
 		this.filenamePreviewValue.textContent = fullFilename;

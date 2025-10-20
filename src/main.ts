@@ -1,28 +1,45 @@
 import { App, Plugin, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./exportbib";
-require('@citation-js/plugin-hayagriva');
+require("@citation-js/plugin-hayagriva");
 import { SourceService } from "./sourceService";
 import { setCrossrefUserAgent } from "./sourceManager";
-import { SourceData } from "./types";
+import { BIBLIOGRAPHY_FORMAT_MAPPING, SourceData } from "./types";
 import { getBibliographyCommands } from "./bibliographyCommands";
 import { BibliographySettingTab } from "./settings";
 
 // Import settings and defaults from settings and types files
 import { DEFAULT_SETTINGS } from "./settings";
-import { BibliographySettings } from "./types";
+import {
+	BibliographySettings,
+	FORMAT_EXTENSION_MAPPING,
+} from "./types";
 
 // API interface that other plugins can use
 export interface BibliographyAPI {
 	/**
-	 * Generate bibliography content from sources
-	 * @param config.sourcesFolder - Source files folder (defaults to plugin settings)
-	 * @param config.format - Export format: bibtex, csl-json, or hayagriva (defaults to plugin settings)
-	 * @returns Bibliography content as string
+	 * Export bibliography content from sources
+	 * @param sourcesFolder - Source files folder (defaults to plugin settings)
+	 * @param format - Export format: "bibtex", "csl-json", "hayagriva" (optional, auto-detects if nullish + outputFilename provided)
+	 * @param outputFilename - Output filename (optional, used for format auto-detection)
+	 * @returns Promise<string> Generated bibliography content
+	 *
+	 * @example
+	 * // Export using plugin defaults
+	 * const bib = await api.exportBibliography();
+	 *
+	 * @example
+	 * // Auto-detect format from filename (format is nullish)
+	 * const bib = await api.exportBibliography(undefined, null, "my-bib.json");
+	 *
+	 * @example
+	 * // Specific format with custom filename
+	 * const bib = await api.exportBibliography('sources', 'bibtex', 'references.bib');
 	 */
-	generateBibliography(config?: {
-		sourcesFolder?: string;
-		format?: "bibtex" | "csl-json" | "hayagriva";
-	}): Promise<string>;
+	exportBibliography(
+		sourcesFolder?: string,
+		format?: "bibtex" | "csl-json" | "hayagriva" | null,
+		outputFilename?: string
+	): Promise<string>;
 }
 
 export default class BibliographyManagerPlugin extends Plugin {
@@ -125,7 +142,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 					console.log(
 						`Loaded template from file: ${this.settings.templateFile}`
 					);
-									} else {
+				} else {
 					console.warn(
 						`Template file not found: ${this.settings.templateFile}`
 					);
@@ -144,19 +161,56 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	private createAPI(): BibliographyAPI {
 		return {
-			// Generate bibliography content from sources using existing workflow
-			generateBibliography: async (config = {}) => {
+			/**
+			 * Generate bibliography content from sources
+			 * @param sourcesFolder Path to folder containing source files (optional, uses plugin setting)
+			 * @param format Output format ('bibtex', 'csl', 'yaml', etc.) (optional, uses plugin setting)
+			 * @returns Promise<string> Generated bibliography content
+			 *
+			 * @example
+			 * // Export using plugin defaults
+			 * const bib = await api.exportBibliography();
+			 *
+			 * @example
+			 * // Auto-detect format from filename (format is nullish)
+			 * const bib = await api.exportBibliography(undefined, null, "my-bib.json");
+			 *
+			 * @example
+			 * // Specific format with custom filename
+			 * const bib = await api.exportBibliography('sources', 'bibtex', 'references.bib');
+			 */
+			exportBibliography: async (
+				sourcesFolder?: string,
+				format?: "bibtex" | "csl-json" | "hayagriva" | null,
+				outputFilename?: string
+			) => {
 				try {
-					// Use plugin settings as fallback for all optional parameters
-					const sourcesFolder =
-						config.sourcesFolder || this.settings.sourcesFolder;
-					const format = config.format || this.settings.bibliographyFormat;
+					const folder = sourcesFolder || this.settings.sourcesFolder;
+
+					// Smart format detection (only when format is nullish AND outputFilename provided)
+					let bibFormat = format || this.settings.bibliographyFormat;
+					if (
+						(format === null || format === undefined) &&
+						outputFilename
+					) {
+						const ext = outputFilename
+							.toLowerCase()
+							.substring(outputFilename.lastIndexOf("."));
+						const detectedFormat = BIBLIOGRAPHY_FORMAT_MAPPING[ext];
+
+						if (!detectedFormat) {
+							throw new Error(`Unsupported file extension: ${ext}. Supported extensions: .bib, .json, .yaml, .yml`);
+						}
+
+						bibFormat = detectedFormat as "bibtex" | "csl-json" | "hayagriva";
+					}
 
 					// Use existing sourceService method
-					const bibContent = await this.sourceService.generateBibliography(
-						sourcesFolder,
-						format
-					);
+					const bibContent =
+						await this.sourceService.generateBibliography(
+							folder,
+							bibFormat
+						);
 
 					if (!bibContent || bibContent.trim() === "") {
 						throw new Error(
@@ -166,7 +220,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 					return bibContent;
 				} catch (error) {
-					console.error("API: Failed to generate bibliography:", error);
+					console.error("API: Failed to export bibliography:", error);
 					throw error;
 				}
 			},
@@ -174,11 +228,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 	}
 
 	private registerCommands() {
-		const commands = getBibliographyCommands(
-			this.app,
-			this.settings,
-			this
-		);
+		const commands = getBibliographyCommands(this.app, this.settings, this);
 
 		commands.forEach((command) => {
 			this.addCommand(command);
@@ -208,17 +258,17 @@ export default class BibliographyManagerPlugin extends Plugin {
 			callback: async () => {
 				try {
 					// Generate full filename with extension based on format
-					const extensionMap: Record<string, string> = {
-						"bibtex": ".bib",
-						"csl-json": ".json",
-						"hayagriva": ".yaml"
-					};
-					const extension = extensionMap[this.settings.bibliographyFormat] || ".bib";
-					const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
+					const extension =
+						FORMAT_EXTENSION_MAPPING[
+							this.settings.bibliographyFormat
+						] || ".bib";
+					const outputFolder =
+						this.settings.bibliographyOutputFolder ||
+						this.settings.sourcesFolder;
 					const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
 
 					// Generate bibliography using API
-					const bibContent = await this.api.generateBibliography();
+					const bibContent = await this.api.exportBibliography();
 
 					// Write to file
 					await this.app.vault.adapter.write(bibPath, bibContent);
