@@ -1,6 +1,6 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
-import { BIB_FIELDS, DEFAULT_SETTINGS, BibliographySettings } from "settings";
+import { BIB_FIELDS, DEFAULT_SETTINGS, BibliographySettings } from "./settings";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";

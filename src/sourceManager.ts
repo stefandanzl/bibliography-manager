@@ -1,5 +1,5 @@
 import { App, TFile, Notice, normalizePath, Modal } from "obsidian";
-import BibliographyManagerPlugin from "../main";
+import BibliographyManagerPlugin from "./main";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite, util } from "@citation-js/core";

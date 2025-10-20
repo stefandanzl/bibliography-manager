@@ -1,9 +1,9 @@
 import { App, Plugin, Notice } from "obsidian";
-import { BibliographyExporter, CitekeyGenerator } from "./utils/exportbib";
+import { BibliographyExporter, CitekeyGenerator } from "./exportbib";
 require('@citation-js/plugin-hayagriva');
-import { SourceService } from "./utils/sourceService";
-import { SourceData, setCrossrefUserAgent } from "./utils/sourceManager";
-import { getBibliographyCommands } from "./utils/bibliographyCommands";
+import { SourceService } from "./sourceService";
+import { SourceData, setCrossrefUserAgent } from "./sourceManager";
+import { getBibliographyCommands } from "./bibliographyCommands";
 import { BibliographySettingTab } from "./settings";
 
 // Import settings and defaults from settings file

@@ -1,5 +1,5 @@
 import { App } from "obsidian";
-import { setCrossrefUserAgent } from "../../utils/sourceManager";
+import { setCrossrefUserAgent } from "../../src/sourceManager";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";

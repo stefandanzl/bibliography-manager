@@ -1,4 +1,4 @@
-import BibliographyManagerPlugin from "main";
+import BibliographyManagerPlugin from "./main";
 import {
 	App,
 	Plugin,

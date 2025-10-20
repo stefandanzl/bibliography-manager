@@ -8,9 +8,9 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { BibliographySettings } from "../settings";
+import { BibliographySettings } from "./settings";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
-import BibliographyManagerPlugin from "../main";
+import BibliographyManagerPlugin from "./main";
 import { SourceService } from "./sourceService";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types

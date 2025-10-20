@@ -7,7 +7,7 @@ import {
 	stringifyYaml,
 } from "obsidian";
 // No Handlebars import - we'll use simple regex replacement
-import type { BibliographySettings } from "../settings";
+import type { BibliographySettings } from "./settings";
 
 // Initialize citation-js properly for browser environment
 let CiteConstructor: any = null;
