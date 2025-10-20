@@ -4,7 +4,7 @@ import { BIB_FIELDS, DEFAULT_SETTINGS } from "settings";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";
-require('@citation-js/plugin-hayagriva');
+require("@citation-js/plugin-hayagriva");
 
 export class SourceService {
 	app: App;
@@ -55,7 +55,10 @@ export class SourceService {
 			const filePath = normalizePath(`${fullPath}/${filename}.md`);
 
 			// Generate file content
-			const content = this.generateSourceFileContent(sourceData, template);
+			const content = this.generateSourceFileContent(
+				sourceData,
+				template
+			);
 
 			// Create file using Obsidian API
 			const file = await this.app.vault.create(filePath, content);
@@ -217,46 +220,43 @@ export class SourceService {
 	/**
 	 * Render template using simple regex replacement
 	 */
-	private renderTemplate(
-		template: string,
-		sourceData: SourceData
-	): string {
+	private renderTemplate(template: string, sourceData: SourceData): string {
 		// Create template data object with direct field access
 		const templateData: Record<string, any> = {};
 
 		// Direct field mapping - template variables match source data fields
-		Object.keys(sourceData).forEach(field => {
+		Object.keys(sourceData).forEach((field) => {
 			const value = sourceData[field as keyof SourceData];
 
 			if (value !== undefined && value !== null) {
 				// Handle special formatting for certain fields
-				if (field === 'atcitekey') {
+				if (field === "atcitekey") {
 					// Special handling for atcitekey - prepend @ symbol
 					templateData[field] = `@${value}`;
 				} else if (Array.isArray(value)) {
 					// For arrays, provide both array version and pre-formatted YAML array string
-					templateData[field] = value;  // Keep as array for other uses
-					templateData[field + 'Array'] = this.formatYamlArray(value);  // Pre-formatted YAML array
-				} else if (typeof value === 'string') {
+					templateData[field] = value; // Keep as array for other uses
+					templateData[field + "Array"] = this.formatYamlArray(value); // Pre-formatted YAML array
+				} else if (typeof value === "string") {
 					templateData[field] = value;
 				} else {
 					templateData[field] = String(value);
 				}
 			} else {
 				// Set empty arrays for fields that should be arrays, empty strings for others
-				if (field === 'author' || field === 'keywords') {
-					templateData[field] = [];  // Empty array for YAML
-					templateData[field + 'Array'] = '[]';  // Empty YAML array string
+				if (field === "author" || field === "keywords") {
+					templateData[field] = []; // Empty array for YAML
+					templateData[field + "Array"] = "[]"; // Empty YAML array string
 				} else {
-					templateData[field] = '';
+					templateData[field] = "";
 				}
 			}
 		});
 
 		// Add helper fields
 		templateData.authorList = Array.isArray(sourceData.author)
-			? sourceData.author.join(', ')
-			: sourceData.author || '';
+			? sourceData.author.join(", ")
+			: sourceData.author || "";
 		// Add atcitekey for aliases (citekey with @ prefix)
 		if (sourceData.citekey) {
 			templateData.atcitekey = `@${sourceData.citekey}`;
@@ -267,40 +267,10 @@ export class SourceService {
 		result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
 			const trimmedPath = fieldPath.trim();
 			const value = templateData[trimmedPath];
-			return value !== undefined && value !== null ? String(value) : '';
+			return value !== undefined && value !== null ? String(value) : "";
 		});
 
 		return result;
-	}
-
-	/**
-	 * Generate basic source content as fallback
-	 */
-	private generateBasicSourceContent(sourceData: SourceData): string {
-		let content = "---\n";
-	content += `citekey: ${sourceData.citekey || ''}\n`;
-		content += `title: "${sourceData.title || 'Untitled'}"\n`;
-
-		if (sourceData.author && Array.isArray(sourceData.author) && sourceData.author.length > 0) {
-			content += `author: ${JSON.stringify(sourceData.author)}\n`;
-		}
-
-		if (sourceData.year) {
-			content += `year: ${sourceData.year}\n`;
-		}
-
-		if (sourceData.bibtype) {
-			content += `bibtype: ${sourceData.bibtype}\n`;
-		}
-
-		content += "---\n\n";
-		content += `# ${sourceData.title || 'Untitled'}\n\n`;
-
-		if (sourceData.author && Array.isArray(sourceData.author) && sourceData.author.length > 0) {
-			content += `${sourceData.author.join(', ')}\n\n`;
-		}
-
-		return content;
 	}
 
 	/**
@@ -310,15 +280,17 @@ export class SourceService {
 		const sourceFiles: TFile[] = [];
 
 		try {
-					const folder = this.app.vault.getAbstractFileByPath(sourcesFolder);
+			const folder = this.app.vault.getAbstractFileByPath(sourcesFolder);
 			if (!(folder instanceof TFolder)) {
-				console.warn(`⚠️ Sources folder not found or not a folder: ${sourcesFolder}`);
+				console.warn(
+					`⚠️ Sources folder not found or not a folder: ${sourcesFolder}`
+				);
 				return sourceFiles;
 			}
 
-					// Recursively search for markdown files
+			// Recursively search for markdown files
 			await this.searchSourceFilesRecursive(folder, sourceFiles);
-					} catch (error) {
+		} catch (error) {
 			console.error("Error finding source files:", error);
 		}
 
@@ -340,9 +312,9 @@ export class SourceService {
 					sourceFiles.push(child);
 				} else {
 					console.warn(`Source file without citekey: ${child.name}`);
-									}
+				}
 			} else if (child instanceof TFolder) {
-								await this.searchSourceFilesRecursive(child, sourceFiles);
+				await this.searchSourceFilesRecursive(child, sourceFiles);
 			}
 		}
 	}
@@ -352,7 +324,10 @@ export class SourceService {
 	 * @param sourcesFolder - Folder containing source files
 	 * @param format - Output format: 'bibtex', 'csl-json', or 'hayagriva'
 	 */
-	async generateBibliography(sourcesFolder: string, format: 'bibtex' | 'csl-json' | 'hayagriva'): Promise<string> {
+	async generateBibliography(
+		sourcesFolder: string,
+		format: "bibtex" | "csl-json" | "hayagriva"
+	): Promise<string> {
 		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
 		const citeData: any[] = [];
 		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
@@ -373,7 +348,11 @@ export class SourceService {
 				if (seenCitekeys.has(citekey)) {
 					duplicatesFound++;
 					const existing = seenCitekeys.get(citekey)!;
-					console.log(`%cDUPLICATE CITEKEY FOUND: ${citekey}%c\nOriginal: ${existing.file.path}\nDuplicate: ${file.path}`, 'color: #7f6df2; font-weight: bold;', 'color: #7f6df2;');
+					console.log(
+						`%cDUPLICATE CITEKEY FOUND: ${citekey}%c\nOriginal: ${existing.file.path}\nDuplicate: ${file.path}`,
+						"color: #7f6df2; font-weight: bold;",
+						"color: #7f6df2;"
+					);
 
 					// Update count for reporting
 					existing.count++;
@@ -382,7 +361,8 @@ export class SourceService {
 					seenCitekeys.set(citekey, { file, count: 1 });
 
 					// Convert frontmatter to citation-js format
-					const citationEntry = this.convertFrontmatterToCitationJS(frontmatter);
+					const citationEntry =
+						this.convertFrontmatterToCitationJS(frontmatter);
 					if (citationEntry) {
 						citeData.push(citationEntry);
 					}
@@ -409,20 +389,23 @@ export class SourceService {
 			const cite = new Cite(citeData);
 
 			switch (format) {
-				case 'bibtex':
-					return cite.format('bibtex', {
-						format: 'text',
-						lang: 'en-US'
+				case "bibtex":
+					return cite.format("bibtex", {
+						format: "text",
+						lang: "en-US",
 					});
-				case 'hayagriva':
-					return cite.format('hayagriva');
-				case 'csl-json':
-					return JSON.stringify(citeData, null, 2);
+				case "hayagriva":
+					return cite.format("hayagriva");
+				case "csl-json":
+					return cite.format("data", { format: "object" });
 				default:
 					throw new Error(`Unsupported format: ${format}`);
 			}
 		} catch (error) {
-			console.error(`Error generating ${format} with citation-js:`, error);
+			console.error(
+				`Error generating ${format} with citation-js:`,
+				error
+			);
 			throw new Error(`Failed to generate ${format}: ${error.message}`);
 		}
 	}
@@ -432,7 +415,7 @@ export class SourceService {
 	 * @deprecated Use generateBibliography(sourcesFolder, 'bibtex') instead
 	 */
 	async generateBibTeXFromSources(sourcesFolder: string): Promise<string> {
-		return this.generateBibliography(sourcesFolder, 'bibtex');
+		return this.generateBibliography(sourcesFolder, "bibtex");
 	}
 
 	/**
@@ -440,9 +423,8 @@ export class SourceService {
 	 * @deprecated Use generateBibliography(sourcesFolder, 'hayagriva') instead
 	 */
 	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
-		return this.generateBibliography(sourcesFolder, 'hayagriva');
+		return this.generateBibliography(sourcesFolder, "hayagriva");
 	}
-
 
 	/**
 	 * Map our source types to CSL-JSON/BibTeX types
@@ -471,14 +453,14 @@ export class SourceService {
 
 	private formatYamlArray(array: any[]): string {
 		if (!array || array.length === 0) {
-			return '[]';
+			return "[]";
 		}
 
 		// Format each element as a YAML string
-		const formattedItems = array.map(item => {
-			if (typeof item === 'string') {
+		const formattedItems = array.map((item) => {
+			if (typeof item === "string") {
 				return `"${item.replace(/"/g, '\\"')}"`;
-			} else if (typeof item === 'number' || typeof item === 'boolean') {
+			} else if (typeof item === "number" || typeof item === "boolean") {
 				return String(item);
 			} else {
 				// For objects or complex types, convert to string
@@ -486,7 +468,7 @@ export class SourceService {
 			}
 		});
 
-		return `[${formattedItems.join(', ')}]`;
+		return `[${formattedItems.join(", ")}]`;
 	}
 
 	/**
@@ -507,7 +489,10 @@ export class SourceService {
 		// Create citation-js entry
 		const citationEntry: any = {
 			id: frontmatter[mappings.id] || frontmatter.citekey,
-			type: this.mapToBibTeXType(frontmatter[mappings.type] || frontmatter.bibtype, frontmatter.category?.[0])
+			type: this.mapToBibTeXType(
+				frontmatter[mappings.type] || frontmatter.bibtype,
+				frontmatter.category?.[0]
+			),
 		};
 
 		// Map fields using mappings directly
@@ -517,48 +502,53 @@ export class SourceService {
 				const value = frontmatter[frontmatterKey];
 
 				// Handle arrays specially for author and keywords
-				if (bibField === 'author' && Array.isArray(value)) {
+				if (bibField === "author" && Array.isArray(value)) {
 					citationEntry.author = value;
-				} else if (bibField === 'keyword' && Array.isArray(value)) {
+				} else if (bibField === "keyword" && Array.isArray(value)) {
 					citationEntry.keyword = value;
 				} else if (Array.isArray(value) && value.length > 0) {
 					// Convert other arrays to strings
-					citationEntry[bibField] = value.join(', ');
-				} else if (!Array.isArray(value) && value && value.toString().trim() !== '') {
+					citationEntry[bibField] = value.join(", ");
+				} else if (
+					!Array.isArray(value) &&
+					value &&
+					value.toString().trim() !== ""
+				) {
 					citationEntry[bibField] = value;
 				}
 			}
 		}
 
 		// Handle special fields that need specific formatting
-		const yearKey = mappings['issued'] || 'year';
+		const yearKey = mappings["issued"] || "year";
 		if (frontmatter[yearKey]) {
-			if (typeof frontmatter[yearKey] === 'string') {
+			if (typeof frontmatter[yearKey] === "string") {
 				// Extract year from date string if needed
 				const yearMatch = frontmatter[yearKey].match(/\d{4}/);
 				if (yearMatch) {
-					citationEntry.issued = { 'date-parts': [[yearMatch[0]]] };
+					citationEntry.issued = { "date-parts": [[yearMatch[0]]] };
 				}
-			} else if (typeof frontmatter[yearKey] === 'number') {
-				citationEntry.issued = { 'date-parts': [[frontmatter[yearKey]]] };
+			} else if (typeof frontmatter[yearKey] === "number") {
+				citationEntry.issued = {
+					"date-parts": [[frontmatter[yearKey]]],
+				};
 			}
 		}
 
-		const doiKey = mappings['DOI'] || 'doi';
-		if (frontmatter[doiKey] && typeof frontmatter[doiKey] === 'string') {
+		const doiKey = mappings["DOI"] || "doi";
+		if (frontmatter[doiKey] && typeof frontmatter[doiKey] === "string") {
 			// Clean up DOI - remove URL prefix if present
 			let doi = frontmatter[doiKey];
-			if (doi.startsWith('https://doi.org/')) {
-				doi = doi.replace('https://doi.org/', '');
-			} else if (doi.startsWith('http://dx.doi.org/')) {
-				doi = doi.replace('http://dx.doi.org/', '');
-			} else if (doi.startsWith('doi:')) {
-				doi = doi.replace('doi:', '').trim();
+			if (doi.startsWith("https://doi.org/")) {
+				doi = doi.replace("https://doi.org/", "");
+			} else if (doi.startsWith("http://dx.doi.org/")) {
+				doi = doi.replace("http://dx.doi.org/", "");
+			} else if (doi.startsWith("doi:")) {
+				doi = doi.replace("doi:", "").trim();
 			}
 			citationEntry.DOI = doi;
 		}
 
 		return citationEntry;
 	}
-
 }
