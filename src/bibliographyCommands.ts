@@ -69,7 +69,8 @@ export class GenerateCitekeyCommand {
 				}
 			} else {
 				// Convert string alias to array and add @citekey
-				const existingAliases = typeof yaml.aliases === 'string' ? [yaml.aliases] : [];
+				const existingAliases =
+					typeof yaml.aliases === "string" ? [yaml.aliases] : [];
 				yaml.aliases = [...existingAliases, `@${citekey}`];
 			}
 
@@ -163,14 +164,18 @@ export class BibliographyExportModal extends Modal {
 
 	private async loadSources(scope: string) {
 		try {
-			console.log(`🔍 Loading sources for bibliography export, scope: ${scope}`);
+			console.log(
+				`🔍 Loading sources for bibliography export, scope: ${scope}`
+			);
 
 			if (scope === "vault") {
 				// Use sources folder from settings
 				const sourcesFolder = this.settings.sourcesFolder;
 				console.log(`📂 Using sources folder: ${sourcesFolder}`);
 
-				const sourceFiles = await this.sourceService.findAllSourceFiles(sourcesFolder);
+				const sourceFiles = await this.sourceService.findAllSourceFiles(
+					sourcesFolder
+				);
 				console.log(`📄 Found ${sourceFiles.length} source files`);
 
 				// Generate bibliography based on format
@@ -183,7 +188,11 @@ export class BibliographyExportModal extends Modal {
 					format
 				);
 
-				console.log(`📊 Generated bibliography content length: ${this.bibContent?.length || 0}`);
+				console.log(
+					`📊 Generated bibliography content length: ${
+						this.bibContent?.length || 0
+					}`
+				);
 			} else {
 				// Current document scope - would need to extract sources from current file
 				// For now, fall back to vault scope
@@ -202,16 +211,25 @@ export class BibliographyExportModal extends Modal {
 	private async exportBibliography() {
 		try {
 			// Generate full filename with extension based on format
-			const extension = FORMAT_EXTENSION_MAPPING[this.settings.bibliographyFormat] || ".bib";
-			const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
+			const extension =
+				FORMAT_EXTENSION_MAPPING[this.settings.bibliographyFormat] ||
+				".bib";
+			const outputFolder =
+				this.settings.bibliographyOutputFolder ||
+				this.settings.sourcesFolder;
 			const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
 
 			console.log(`📝 Exporting bibliography to: ${bibPath}`);
-			console.log(`📊 Content length: ${this.bibContent?.length || 0} characters`);
+			console.log(
+				`📊 Content length: ${this.bibContent?.length || 0} characters`
+			);
 
 			// Ensure output directory exists
 			const outputDir = outputFolder;
-			if (outputDir && !(await this.app.vault.adapter.exists(outputDir))) {
+			if (
+				outputDir &&
+				!(await this.app.vault.adapter.exists(outputDir))
+			) {
 				console.log(`📁 Creating output directory: ${outputDir}`);
 				await this.app.vault.adapter.mkdir(outputDir);
 			}
@@ -239,10 +257,71 @@ export class SourceImportModal extends Modal {
 	private settings: BibliographySettings;
 	private plugin?: BibliographyManagerPlugin;
 
-	constructor(app: App, settings: BibliographySettings, plugin?: BibliographyManagerPlugin) {
+	constructor(
+		app: App,
+		settings: BibliographySettings,
+		plugin?: BibliographyManagerPlugin
+	) {
 		super(app);
 		this.settings = settings;
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Unified function to process citation-js data and update sourceData
+	 * Eliminates redundant code across all import methods
+	 */
+	private processCitationData(citationData: any): void {
+		if (!citationData || typeof citationData !== "object") {
+			throw new Error("Invalid citation data received");
+		}
+
+		// Update core fields - only overwrite if citation has value
+		this.sourceData.title = citationData.title || this.sourceData.title;
+		this.sourceData.author = citationData.author
+			? CitekeyGenerator.extractAuthorsFromCitationData(citationData)
+			: this.sourceData.author;
+		this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+			citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
+			citationData.year?.toString() ||
+			this.sourceData.year;
+		this.sourceData.abstract = citationData.abstract;
+
+		// Update bibliographic fields
+		this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
+		this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+		this.sourceData.doi = citationData.DOI || this.sourceData.doi;
+		this.sourceData.isbn = citationData.ISBN || this.sourceData.isbn;
+		this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
+		this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+		this.sourceData.volume = citationData.volume || this.sourceData.volume;
+		this.sourceData.number = citationData.issue || this.sourceData.number;
+
+		// Set bibtype directly from citation-js (already correct BibTeX/CSL type)
+		this.sourceData.bibtype = citationData.type ||
+			(this.mediaType === "Book" ? "book" : "misc");
+
+		// Handle keywords if they exist
+		if (citationData.keyword) {
+			this.sourceData.keywords = Array.isArray(citationData.keyword)
+				? citationData.keyword
+				: [citationData.keyword];
+		}
+
+		// Generate citekey if not present and we have required data
+		if (
+			!this.sourceData.citekey &&
+			this.sourceData.title &&
+			this.sourceData.author &&
+			this.sourceData.year
+		) {
+			this.sourceData.citekey =
+				CitekeyGenerator.generateFromTitleAndAuthors(
+					this.sourceData.title,
+					this.sourceData.author,
+					parseInt(this.sourceData.year)
+				);
+		}
 	}
 
 	onOpen() {
@@ -478,39 +557,8 @@ export class SourceImportModal extends Modal {
 				return;
 			}
 
-			const citationData = data[0];
-
-			// Update sourceData with fetched metadata
-			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
-			this.sourceData.year =
-				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.year?.toString() ||
-				this.sourceData.year;
-			this.sourceData.journal =
-				citationData["container-title"] || this.sourceData.journal;
-			this.sourceData.publisher =
-				citationData.publisher || this.sourceData.publisher;
-			this.sourceData.abstract = citationData.abstract;
-			this.sourceData.doi = citationData.DOI;
-			this.sourceData.url =
-				citationData.URL || citationData.url || this.sourceData.url;
-
-			// Generate citekey if not present
-			if (
-				!this.sourceData.citekey &&
-				this.sourceData.title &&
-				this.sourceData.author &&
-				this.sourceData.year
-			) {
-				this.sourceData.citekey =
-					CitekeyGenerator.generateFromTitleAndAuthors(
-						this.sourceData.title,
-						this.sourceData.author,
-						this.sourceData.year
-					);
-			}
+			// Use unified function to process citation data (includes citekey generation)
+			this.processCitationData(data[0]);
 
 			new Notice("Metadata fetched successfully");
 
@@ -542,47 +590,17 @@ export class SourceImportModal extends Modal {
 			const cite = await Cite.async(cleanDOI);
 			const data = await cite.format("data", { format: "object" });
 
+			console.warn("Lookup DOI");
+			console.log(data);
 			if (!data || data.length === 0) {
 				throw new Error("No data found for this DOI");
 			}
+			// Use unified function to process citation data
+			this.processCitationData(data[0]);
 
-			const citationData = data[0];
-
-			// Update sourceData with fetched metadata
-			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
-			this.sourceData.year =
-				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.year?.toString() ||
-				this.sourceData.year;
-			this.sourceData.journal =
-				citationData["container-title"] || this.sourceData.journal;
-			this.sourceData.publisher =
-				citationData.publisher || this.sourceData.publisher;
-			this.sourceData.abstract = citationData.abstract;
-			this.sourceData.doi = citationData.DOI || this.sourceData.doi;
-			this.sourceData.url =
-				citationData.URL || citationData.url || this.sourceData.url;
-			this.sourceData.volume = citationData.volume;
-			this.sourceData.number = citationData.issue;
-			this.sourceData.pages = citationData.page
-				? parseInt(citationData.page)
-				: undefined;
-
-			// Generate citekey if not present
-			if (
-				!this.sourceData.citekey &&
-				this.sourceData.title &&
-				this.sourceData.author &&
-				this.sourceData.year
-			) {
-				this.sourceData.citekey =
-					CitekeyGenerator.generateFromTitleAndAuthors(
-						this.sourceData.title,
-						this.sourceData.author,
-						this.sourceData.year
-					);
+			// DOI-specific bibtype fallback (for academic papers)
+			if (!this.sourceData.bibtype || this.sourceData.bibtype === "misc") {
+				this.sourceData.bibtype = "paper";
 			}
 
 			new Notice("DOI lookup successful");
@@ -615,46 +633,10 @@ export class SourceImportModal extends Modal {
 				throw new Error("Invalid BibTeX format");
 			}
 
-			const citationData = data[0];
+			// Use unified function to process citation data
+			this.processCitationData(data[0]);
 
-			// Update sourceData with parsed metadata
-			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
-			this.sourceData.year =
-				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.year?.toString() ||
-				this.sourceData.year;
-			this.sourceData.journal =
-				citationData["container-title"] || this.sourceData.journal;
-			this.sourceData.publisher =
-				citationData.publisher || this.sourceData.publisher;
-			this.sourceData.abstract = citationData.abstract;
-			this.sourceData.doi = citationData.DOI;
-			this.sourceData.isbn = citationData.ISBN;
-			this.sourceData.url =
-				citationData.URL || citationData.url || this.sourceData.url;
-			this.sourceData.volume = citationData.volume;
-			this.sourceData.number = citationData.issue;
-			this.sourceData.pages = citationData.page
-				? parseInt(citationData.page)
-				: undefined;
-			this.sourceData.bibtype = citationData.type || "misc";
-
-			// Generate citekey if not present
-			if (
-				!this.sourceData.citekey &&
-				this.sourceData.title &&
-				this.sourceData.author &&
-				this.sourceData.year
-			) {
-				this.sourceData.citekey =
-					CitekeyGenerator.generateFromTitleAndAuthors(
-						this.sourceData.title,
-						this.sourceData.author,
-						this.sourceData.year
-					);
-			}
+			// BibTeX processing complete (all fields handled by unified function)
 
 			new Notice("BibTeX parsing successful");
 
@@ -689,41 +671,8 @@ export class SourceImportModal extends Modal {
 				throw new Error("No data found for this ISBN");
 			}
 
-			const citationData = data[0];
-
-			// Update sourceData with fetched metadata
-			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
-			this.sourceData.year =
-				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-				citationData.year?.toString() ||
-				this.sourceData.year;
-			this.sourceData.publisher =
-				citationData.publisher || this.sourceData.publisher;
-			this.sourceData.abstract = citationData.abstract;
-			this.sourceData.isbn = citationData.ISBN || this.sourceData.isbn;
-			this.sourceData.url =
-				citationData.URL || citationData.url || this.sourceData.url;
-			this.sourceData.pages = citationData.page
-				? parseInt(citationData.page)
-				: undefined;
-			this.sourceData.bibtype = citationData.type || "book";
-
-			// Generate citekey if not present
-			if (
-				!this.sourceData.citekey &&
-				this.sourceData.title &&
-				this.sourceData.author &&
-				this.sourceData.year
-			) {
-				this.sourceData.citekey =
-					CitekeyGenerator.generateFromTitleAndAuthors(
-						this.sourceData.title,
-						this.sourceData.author,
-						this.sourceData.year
-					);
-			}
+			// Use unified function to process citation data
+			this.processCitationData(data[0]);
 
 			new Notice("ISBN lookup successful");
 
@@ -758,7 +707,6 @@ export class SourceImportModal extends Modal {
 		}
 	}
 
-	
 	private showUpdatedData() {
 		let message = "Updated data:\n";
 		if (this.sourceData.title)
@@ -797,11 +745,14 @@ export class SourceImportModal extends Modal {
 			this.close();
 		} catch (error) {
 			console.error("Error importing source:", error);
-			const errorMessage = error instanceof Error ? error.message : "Unknown error";
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error";
 
 			if (errorMessage.includes("File already exists")) {
 				// Special handling for duplicate files
-				new Notice("⚠️ Duplicate Source Detected\n\nA source file with this citekey already exists. Try importing with a different title or check your sources folder for duplicates.");
+				new Notice(
+					"⚠️ Duplicate Source Detected\n\nA source file with this citekey already exists. Try importing with a different title or check your sources folder for duplicates."
+				);
 			} else {
 				// Generic error for other issues
 				new Notice(`Error importing source\n\n${errorMessage}`);
