@@ -7,20 +7,7 @@ import {
 	AbstractInputSuggest,
 	Notice,
 } from "obsidian";
-
-// Plugin settings interface
-export interface BibliographySettings {
-	sourcesFolder: string;
-	bibliographyFilename: string;
-	bibliographyOutputFolder: string;
-	bibliographyFormat: "bibtex" | "csl-json" | "hayagriva";
-	autoGenerate: boolean;
-	supportedFileTypes: string[];
-	crossrefEmail: string;
-	sourceNoteTemplate: string;
-	templateFile: string;
-	fieldMappings: Record<string, string>;
-}
+import { BibliographySettings } from "./types";
 
 // Default settings
 export const DEFAULT_SETTINGS: BibliographySettings = {
@@ -61,6 +48,8 @@ imageurl: {{imageurl}}
 
 ## Abstract
 {{abstract}}
+
+{{abstractmd}}
 
 **Keywords:** {{keywords}}
 

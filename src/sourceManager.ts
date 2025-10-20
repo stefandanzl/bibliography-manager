@@ -1,5 +1,8 @@
-import { App, TFile, Notice, normalizePath, Modal } from "obsidian";
+import { App, Notice, Modal } from "obsidian";
 import BibliographyManagerPlugin from "./main";
+import { SourceData, SourceType, ImportMethod } from "./types";
+import { CitekeyGenerator } from "./exportbib";
+import { JatsFormatter } from "./jatsFormatter";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite, util } from "@citation-js/core";
@@ -47,81 +50,7 @@ export function setCrossrefUserAgent(email: string, showNotifications: boolean =
     }
 }
 
-// Browser-compatible citation-js with plugins
 
-// Crossref API interface for DOI lookup
-interface CrossrefWork {
-	title: string[];
-	author: Array<{
-		given?: string;
-		family?: string;
-		name?: string;
-	}>;
-	published?: {
-		'date-parts': Array<Array<number>>;
-	};
-	'DOI': string;
-	'container-title'?: string[];
-	type: string;
-	publisher?: string;
-	volume?: string;
-	issue?: string;
-	page?: string;
-	abstract?: string;
-	ISBN?: string[];
-	URL?: string;
-}
-
-// Open Library API interface for ISBN lookup
-interface OpenLibraryBook {
-	title: string;
-	authors: Array<{ name: string }>;
-	publish_date?: string;
-	publishers?: Array<{ name: string }>;
-	identifiers?: {
-		isbn_10?: string[];
-		isbn_13?: string[];
-	};
-	number_of_pages?: number;
-	publish_places?: Array<{ name: string }>;
-	url?: string;
-}
-
-// Source data interface matching the frontmatter schema
-export interface SourceData {
-	citekey: string;
-	author: string[];
-	category: string[];
-	bibtype: string;
-	downloadurl?: string;
-	imageurl?: string;
-	year?: string;
-	added?: string;
-	started?: string;
-	ended?: string;
-	rating?: string;
-	pages?: number;
-	currentpage?: number;
-	status?: string;
-	filelink?: string;
-	title: string;
-		aliases?: string[];
-	// Additional fields that might come from citation-js
-	abstract?: string;
-	publisher?: string;
-	journal?: string;
-	volume?: string;
-	number?: string;
-	doi?: string;
-	isbn?: string;
-	url?: string;
-}
-
-// Source type detection
-export type SourceType = "book" | "paper" | "website" | "thesis" | "report" | "other";
-
-// Import methods
-export type ImportMethod = "doi" | "isbn" | "url" | "bibtex";
 
 export class SourceImportModal extends Modal {
 	plugin: BibliographyManagerPlugin;
@@ -251,7 +180,7 @@ export class SourceImportModal extends Modal {
 				throw new Error("No data found for this DOI");
 			}
 
-			return this.convertCitationDataToSourceData(data[0], "doi");
+			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
 			throw new Error(`DOI lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
 		}
@@ -269,7 +198,7 @@ export class SourceImportModal extends Modal {
 				throw new Error("No data found for this ISBN");
 			}
 
-			return this.convertCitationDataToSourceData(data[0], "isbn");
+			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
 			throw new Error(`ISBN lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
 		}
@@ -285,7 +214,7 @@ export class SourceImportModal extends Modal {
 				return this.createBasicWebsiteSource(url);
 			}
 
-			return this.convertCitationDataToSourceData(data[0], "url");
+			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
 			// Fallback to basic website data
 			return this.createBasicWebsiteSource(url);
@@ -301,26 +230,32 @@ export class SourceImportModal extends Modal {
 				throw new Error("Invalid BibTeX format");
 			}
 
-			return this.convertCitationDataToSourceData(data[0], "bibtex");
+			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
 			throw new Error(`BibTeX parsing failed: ${error instanceof Error ? error.message : "Unknown error"}`);
 		}
 	}
 
-	private convertCitationDataToSourceData(citationData: any, source: string): SourceData {
-		// Generate citation key if not present
-		let citekey = citationData["citation-key"] || this.generateCitationKey(citationData);
+	private async convertCitationDataToSourceData(citationData: any): Promise<SourceData> {
+		// Extract authors using shared CitekeyGenerator method
+		const authors = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
+
+		// Extract year
+		const year = citationData.issued?.["date-parts"]?.[0]?.[0] ||
+				   citationData.published?.["date-parts"]?.[0]?.[0] ||
+				   citationData.year ||
+				   new Date().getFullYear();
+
+		// Generate citation key if not present, using CitekeyGenerator
+		let citekey = citationData["citation-key"] ||
+			CitekeyGenerator.generateFromTitleAndAuthors(
+				citationData.title || "Untitled Source",
+				authors,
+				year
+			);
 
 		// Detect source type
 		const sourceType = this.detectSourceType(citationData);
-
-		// Extract authors
-		const authors = this.extractAuthors(citationData);
-
-		// Extract year
-		const year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
-				   citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
-				   citationData.year?.toString();
 
 		return {
 			citekey,
@@ -329,11 +264,12 @@ export class SourceImportModal extends Modal {
 			bibtype: citationData.type || "misc",
 			downloadurl: citationData.URL || citationData.url,
 			imageurl: undefined,
-			year,
+			year: year?.toString(),
 			added: new Date().toISOString().split("T")[0],
 			title: citationData.title || "Untitled Source",
-						aliases: [`@${citekey}`],
+			aliases: [`@${citekey}`],
 			abstract: citationData.abstract,
+			abstractmd: citationData.abstract ? await JatsFormatter.formatJatsToMarkdown(citationData.abstract) : undefined,
 			publisher: citationData.publisher,
 			journal: citationData["container-title"],
 			volume: citationData.volume,
@@ -346,7 +282,15 @@ export class SourceImportModal extends Modal {
 	}
 
 	private createBasicWebsiteSource(url: string): SourceData {
-		const citekey = this.generateCitationKeyFromURL(url);
+		const title = CitekeyGenerator.extractTitleFromURL(url);
+		const year = new Date().getFullYear();
+
+		// Generate citekey for website source
+		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+			title,
+			[],
+			year
+		);
 
 		return {
 			citekey,
@@ -355,10 +299,10 @@ export class SourceImportModal extends Modal {
 			bibtype: "webpage",
 			downloadurl: url,
 			imageurl: undefined,
-			year: new Date().getFullYear().toString(),
+			year: year.toString(),
 			added: new Date().toISOString().split("T")[0],
-			title: this.extractTitleFromURL(url),
-						aliases: [`@${citekey}`],
+			title: title,
+			aliases: [`@${citekey}`],
 			url,
 		};
 	}
@@ -386,63 +330,4 @@ export class SourceImportModal extends Modal {
 		return "other";
 	}
 
-	private extractAuthors(citationData: any): string[] {
-		const authors = citationData.author || [];
-		return authors.map((author: any) => {
-			if (author.literal) return author.literal;
-			if (author.family && author.given) {
-				return `${author.family}, ${author.given}`;
-			}
-			if (author.family) return author.family;
-			return "Unknown Author";
-		});
 	}
-
-	private generateCitationKey(citationData: any): string {
-		const firstAuthor = citationData.author?.[0];
-		const year = citationData.issued?.["date-parts"]?.[0]?.[0] ||
-					citationData.year ||
-					new Date().getFullYear();
-
-		let authorPart = "Unknown";
-		if (firstAuthor) {
-			if (firstAuthor.family) {
-				authorPart = firstAuthor.family;
-			} else if (firstAuthor.literal) {
-				authorPart = firstAuthor.literal.split(/\s+/)[0];
-			}
-		}
-
-		const titleWord = citationData.title?.split(/\s+/)[0]?.substring(0, 3).toUpperCase() || "UNK";
-
-		return `${authorPart}${year}${titleWord}`;
-	}
-
-	private generateCitationKeyFromURL(url: string): string {
-		try {
-			const domain = new URL(url).hostname.replace("www.", "");
-			const year = new Date().getFullYear();
-			const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-			return `${domain}${year}${random}`;
-		} catch {
-			const year = new Date().getFullYear();
-			const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-			return `WEB${year}${random}`;
-		}
-	}
-
-	private extractTitleFromURL(url: string): string {
-		try {
-			const urlObj = new URL(url);
-			const pathParts = urlObj.pathname.split("/").filter(part => part.length > 0);
-			const lastPart = pathParts[pathParts.length - 1];
-
-			// Convert dashes and underscores to spaces and capitalize
-			return lastPart.replace(/[-_]/g, " ")
-						  .replace(/\b\w/g, l => l.toUpperCase()) ||
-						  urlObj.hostname;
-		} catch {
-			return "Website Source";
-		}
-	}
-}

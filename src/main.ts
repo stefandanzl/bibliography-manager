@@ -2,12 +2,14 @@ import { App, Plugin, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./exportbib";
 require('@citation-js/plugin-hayagriva');
 import { SourceService } from "./sourceService";
-import { SourceData, setCrossrefUserAgent } from "./sourceManager";
+import { setCrossrefUserAgent } from "./sourceManager";
+import { SourceData } from "./types";
 import { getBibliographyCommands } from "./bibliographyCommands";
 import { BibliographySettingTab } from "./settings";
 
-// Import settings and defaults from settings file
-import { BibliographySettings, DEFAULT_SETTINGS } from "./settings";
+// Import settings and defaults from settings and types files
+import { DEFAULT_SETTINGS } from "./settings";
+import { BibliographySettings } from "./types";
 
 // API interface that other plugins can use
 export interface BibliographyAPI {
@@ -206,7 +208,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 			callback: async () => {
 				try {
 					// Generate full filename with extension based on format
-					const extensionMap = {
+					const extensionMap: Record<string, string> = {
 						"bibtex": ".bib",
 						"csl-json": ".json",
 						"hayagriva": ".yaml"

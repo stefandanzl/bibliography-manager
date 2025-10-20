@@ -8,7 +8,7 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { BibliographySettings } from "./settings";
+import { BibliographySettings } from "./types";
 import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "./main";
 import { SourceService } from "./sourceService";
@@ -202,7 +202,7 @@ export class BibliographyExportModal extends Modal {
 	private async exportBibliography() {
 		try {
 			// Generate full filename with extension based on format
-			const extensionMap = {
+			const extensionMap: Record<string, string> = {
 				"bibtex": ".bib",
 				"csl-json": ".json",
 				"hayagriva": ".yaml"
@@ -487,7 +487,7 @@ export class SourceImportModal extends Modal {
 
 			// Update sourceData with fetched metadata
 			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = this.extractAuthors(citationData);
+			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
 			this.sourceData.year =
 				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
 				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
@@ -555,7 +555,7 @@ export class SourceImportModal extends Modal {
 
 			// Update sourceData with fetched metadata
 			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = this.extractAuthors(citationData);
+			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
 			this.sourceData.year =
 				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
 				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
@@ -624,7 +624,7 @@ export class SourceImportModal extends Modal {
 
 			// Update sourceData with parsed metadata
 			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = this.extractAuthors(citationData);
+			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
 			this.sourceData.year =
 				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
 				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
@@ -698,7 +698,7 @@ export class SourceImportModal extends Modal {
 
 			// Update sourceData with fetched metadata
 			this.sourceData.title = citationData.title || this.sourceData.title;
-			this.sourceData.author = this.extractAuthors(citationData);
+			this.sourceData.author = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
 			this.sourceData.year =
 				citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
 				citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
@@ -746,7 +746,7 @@ export class SourceImportModal extends Modal {
 
 	private createBasicWebsiteData(url: string) {
 		this.sourceData.title =
-			this.sourceData.title || this.extractTitleFromURL(url);
+			this.sourceData.title || CitekeyGenerator.extractTitleFromURL(url);
 		this.sourceData.author = this.sourceData.author || [];
 		this.sourceData.year =
 			this.sourceData.year || new Date().getFullYear().toString();
@@ -763,39 +763,7 @@ export class SourceImportModal extends Modal {
 		}
 	}
 
-	private extractAuthors(citationData: any): string[] {
-		const authors = citationData.author || [];
-		return authors.map((author: any) => {
-			if (author.literal) return author.literal;
-			if (author.family && author.given) {
-				return `${author.family}, ${author.given}`;
-			}
-			if (author.family) return author.family;
-			return "Unknown Author";
-		});
-	}
-
-	private extractTitleFromURL(url: string): string {
-		try {
-			const urlObj = new URL(url);
-			const pathParts = urlObj.pathname
-				.split("/")
-				.filter((part) => part.length > 0);
-			const lastPart = pathParts[pathParts.length - 1];
-
-			if (lastPart) {
-				// Convert dashes and underscores to spaces and capitalize
-				return lastPart
-					.replace(/[-_]/g, " ")
-					.replace(/\b\w/g, (l) => l.toUpperCase());
-			} else {
-				return urlObj.hostname;
-			}
-		} catch {
-			return "Website Source";
-		}
-	}
-
+	
 	private showUpdatedData() {
 		let message = "Updated data:\n";
 		if (this.sourceData.title)

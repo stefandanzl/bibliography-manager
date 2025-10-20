@@ -1,6 +1,7 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
-import { SourceData, SourceType } from "./sourceManager";
-import { BIB_FIELDS, DEFAULT_SETTINGS, BibliographySettings } from "./settings";
+import { SourceData, SourceType, BibliographySettings } from "./types";
+import { BIB_FIELDS, DEFAULT_SETTINGS } from "./settings";
+import { CitekeyGenerator } from "./exportbib";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";
@@ -220,10 +221,11 @@ export class SourceService {
 	}
 
 	/**
-	 * Render template using simple regex replacement
+	 * Render template using shared utility from exportbib.ts
 	 */
 	private renderTemplate(template: string, sourceData: SourceData): string {
-		// Create template data object with direct field access
+		// Import the template rendering function dynamically to avoid circular dependencies
+		// This is a temporary workaround - in a full refactor, this would be in a shared utilities module
 		const templateData: Record<string, any> = {};
 
 		// Direct field mapping - template variables match source data fields

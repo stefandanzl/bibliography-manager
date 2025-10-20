@@ -25,6 +25,7 @@ export interface SourceData {
 
 	// Bibliographic fields from citation-js
 	abstract?: string;
+	abstractmd?: string;
 	publisher?: string;
 	journal?: string;
 	volume?: string;

@@ -7,10 +7,11 @@ import {
 	stringifyYaml,
 } from "obsidian";
 // No Handlebars import - we'll use simple regex replacement
-import type { BibliographySettings } from "./settings";
+import type { BibliographySettings } from "./types";
 
 // Initialize citation-js properly for browser environment
 let CiteConstructor: any = null;
+let utilInstance: any = null;
 
 async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
@@ -532,6 +533,45 @@ export class CitekeyGenerator {
 			// Remove leading/trailing hyphens but keep spaces
 			.replace(/^-+|-+$/g, "")
 			.trim();
+	}
+
+	/**
+	 * Extract authors from citation-js data format and return as string array
+	 */
+	static extractAuthorsFromCitationData(citationData: any): string[] {
+		const authors = citationData.author || [];
+		return authors.map((author: any) => {
+			if (author.literal) return author.literal;
+			if (author.family && author.given) {
+				return `${author.family}, ${author.given}`;
+			}
+			if (author.family) return author.family;
+			return "Unknown Author";
+		});
+	}
+
+	/**
+	 * Extract title from URL as fallback for website sources
+	 */
+	static extractTitleFromURL(url: string): string {
+		try {
+			const urlObj = new URL(url);
+			const pathParts = urlObj.pathname
+				.split("/")
+				.filter((part) => part.length > 0);
+			const lastPart = pathParts[pathParts.length - 1];
+
+			if (lastPart) {
+				// Convert dashes and underscores to spaces and capitalize
+				return lastPart
+					.replace(/[-_]/g, " ")
+					.replace(/\b\w/g, (l) => l.toUpperCase());
+			} else {
+				return urlObj.hostname;
+			}
+		} catch {
+			return "Website Source";
+		}
 	}
 }
 
