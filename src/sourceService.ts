@@ -11,22 +11,75 @@ import { SourceData, SourceType, BibliographySettings } from "./types";
 import { BIB_FIELDS, DEFAULT_SETTINGS } from "./settings";
 import { CitekeyGenerator } from "./exportbib";
 
-// @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite, plugins } from "@citation-js/core";
-import "@citation-js/plugin-bibtex";
-require("@citation-js/plugin-hayagriva");
+// Dynamic imports for citation-js modules
+let CiteConstructor: any = null;
+let utilInstance: any = null;
+let citationUtil: any = null;
 
-// const Cite = require("@citation-js/core").default;
-// require("@citation-js/plugin-doi");
+async function initializeCiteJS() {
+	if (CiteConstructor) return CiteConstructor;
 
-// import Cite, { plugins } from "@citation-js/core";
-// import "@citation-js/plugin-doi";
-// import "@citation-js/plugin-csl";
+	// Use dynamic import for proper module loading
+	const citationCore = await import("@citation-js/core");
+	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
+	const hayagrivaPlugin = await import("@citation-js/plugin-hayagriva");
 
-// Enable using `id` as the cite key label
-console.log(plugins.config.list());
-console.log(plugins.config.get("@bibtex"));
-plugins.config.get("@bibtex").format.useIdAsLabel = true;
+	// Get the Cite class and util
+	CiteConstructor =
+		(citationCore as any).default?.Cite ||
+		(citationCore as any).Cite ||
+		(citationCore as any).default;
+
+	// Get the util object
+	citationUtil = (citationCore as any).default?.util || (citationCore as any).util;
+
+	if (!CiteConstructor) {
+		throw new Error("Could not find Cite constructor in citation-js/core");
+	}
+
+	// Load bibtex plugin
+	const bibtexConfig = (bibtexPlugin as any).default || bibtexPlugin;
+	if (typeof CiteConstructor.add === "function") {
+		CiteConstructor.add(bibtexConfig);
+	}
+
+	// Load hayagriva plugin
+	const hayagrivaConfig = (hayagrivaPlugin as any).default || hayagrivaPlugin;
+	if (typeof CiteConstructor.add === "function") {
+		CiteConstructor.add(hayagrivaConfig);
+	}
+
+	// Enable using `id` as the cite key label
+	const plugins = CiteConstructor.plugins || {};
+	if (plugins.config && plugins.config.get) {
+		try {
+			plugins.config.get("@bibtex").format.useIdAsLabel = true;
+		} catch (e) {
+			console.log("Could not configure bibtex plugin format:", e);
+		}
+	}
+
+	return CiteConstructor;
+}
+
+// Initialize citation-js on module load (but still async)
+initializeCiteJS().then(() => {
+	console.log("Citation-js plugins loaded");
+}).catch(err => {
+	console.error("Failed to initialize citation-js:", err);
+});
+
+// Cite constructor that ensures initialization is complete
+const Cite = function(...args: any[]) {
+	if (!CiteConstructor) {
+		throw new Error("Citation-js not initialized yet");
+	}
+	return new CiteConstructor(...args);
+};
+
+// Export util as well
+export const util = citationUtil;
+export { Cite };
 
 // console.warn("GAAAAAAAAAAAA");
 // console.log(new Cite());

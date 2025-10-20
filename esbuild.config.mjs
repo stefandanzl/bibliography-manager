@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import fs from "node:fs"
 
 const banner =
 	`/*
@@ -39,12 +40,15 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
-	minify: true
+	minify: true,
+	metafile: true
 });
 
 if (prod) {
-	await context.rebuild();
+	const result = await context.rebuild();
+	fs.writeFileSync('meta.json', JSON.stringify(result.metafile))
 	process.exit(0);
 } else {
 	await context.watch();
 }
+

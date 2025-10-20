@@ -3,7 +3,8 @@
     "allow": [
       "mcp___mcp-get-community_server-curl__curl",
       "Bash(task:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node:*)"
     ]
   },
   "enableAllProjectMcpServers": true

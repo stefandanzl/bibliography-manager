@@ -1,6 +1,6 @@
 import { App, Plugin, Notice } from "obsidian";
 import { BibliographyExporter, CitekeyGenerator } from "./exportbib";
-require("@citation-js/plugin-hayagriva");
+// citation-js plugins are now dynamically loaded in sourceService
 import { SourceService } from "./sourceService";
 import { setCrossrefUserAgent } from "./sourceManager";
 import { BIBLIOGRAPHY_FORMAT_MAPPING, SourceData } from "./types";

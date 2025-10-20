@@ -4,12 +4,9 @@ import { SourceData, SourceType, ImportMethod } from "./types";
 import { CitekeyGenerator } from "./exportbib";
 import { JatsFormatter } from "./jatsFormatter";
 
-// @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite, util } from "@citation-js/core";
-import "@citation-js/plugin-doi";
-import "@citation-js/plugin-isbn";
-import "@citation-js/plugin-bibtex";
-// Note: wikidata plugin removed to save 2.5MB bundle size
+// Import from sourceService to use dynamic loading
+import { Cite, util } from "./sourceService";
+// Note: citation-js plugins are now dynamically loaded in sourceService
 
 // Set User-Agent for Crossref API if email is provided
 export function setCrossrefUserAgent(email: string, showNotifications: boolean = true) {

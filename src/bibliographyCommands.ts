@@ -13,12 +13,9 @@ import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "./main";
 import { SourceService } from "./sourceService";
 
-// @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite } from "@citation-js/core";
-import "@citation-js/plugin-doi";
-import "@citation-js/plugin-isbn";
-import "@citation-js/plugin-bibtex";
-// Note: wikidata plugin removed to save 2.5MB bundle size
+// Import Cite from sourceService to use dynamic loading
+import { Cite } from "./sourceService";
+// Note: citation-js plugins are now dynamically loaded in sourceService
 
 export class GenerateCitekeyCommand {
 	constructor(private app: App) {}

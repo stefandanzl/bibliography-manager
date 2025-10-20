@@ -11,6 +11,7 @@ node_modules
 # Don't include the compiled main.js file in the repo.
 # They should be uploaded to GitHub releases instead.
 main.js
+vendor.js
 
 # Exclude sourcemaps
 *.map
@@ -20,4 +21,21 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+
+# Environment files
 .env
+
+# Build artifacts and metadata
+*meta.json
+vendor-meta.json
+dist/
+
+# Temporary build files
+*.tmp
+*.temp
+main-*.js
+vendor-*.js
+
+# Development cache
+.esbuild
+.cache
