@@ -23,7 +23,6 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@types/jest": "^30.0.0",
-		"@types/mustache": "^4.2.6",
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
 		"@typescript-eslint/parser": "5.29.0",
@@ -41,7 +40,6 @@
 		"@citation-js/plugin-doi": "^0.7.18",
 		"@citation-js/plugin-hayagriva": "^0.1.2",
 		"@citation-js/plugin-isbn": "^0.4.0",
-		"mustache": "^4.2.0",
 		"yaml": "^2.8.1"
 	}
 }
