@@ -12,7 +12,7 @@ import { BIB_FIELDS, DEFAULT_SETTINGS } from "./settings";
 import { CitekeyGenerator } from "./exportbib";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
-import Cite, { plugins } from "@citation-js/core";
+import { Cite, plugins } from "@citation-js/core";
 import "@citation-js/plugin-bibtex";
 require("@citation-js/plugin-hayagriva");
 
