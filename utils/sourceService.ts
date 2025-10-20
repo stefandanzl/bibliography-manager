@@ -1,6 +1,6 @@
 import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
 import { SourceData, SourceType } from "./sourceManager";
-import { BIB_FIELDS, DEFAULT_SETTINGS } from "settings";
+import { BIB_FIELDS, DEFAULT_SETTINGS, BibliographySettings } from "settings";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";
@@ -8,9 +8,11 @@ require("@citation-js/plugin-hayagriva");
 
 export class SourceService {
 	app: App;
+	settings: BibliographySettings;
 
-	constructor(app: App) {
+	constructor(app: App, settings?: BibliographySettings) {
 		this.app = app;
+		this.settings = settings || DEFAULT_SETTINGS;
 	}
 
 	/**
@@ -189,7 +191,7 @@ export class SourceService {
 		if (template) {
 			return this.renderTemplate(template, sourceData);
 		}
-
+		console.warn("No template loaded! Fallback template used:");
 		// Fallback to original behavior
 		let content = "---\n";
 
@@ -397,7 +399,8 @@ export class SourceService {
 				case "hayagriva":
 					return cite.format("hayagriva");
 				case "csl-json":
-					return cite.format("data", { format: "object" });
+					// return cite.format("data", { format: "object" });
+					return JSON.stringify(citeData, null, 2);
 				default:
 					throw new Error(`Unsupported format: ${format}`);
 			}
@@ -408,22 +411,6 @@ export class SourceService {
 			);
 			throw new Error(`Failed to generate ${format}: ${error.message}`);
 		}
-	}
-
-	/**
-	 * Generate BibTeX content from all source files
-	 * @deprecated Use generateBibliography(sourcesFolder, 'bibtex') instead
-	 */
-	async generateBibTeXFromSources(sourcesFolder: string): Promise<string> {
-		return this.generateBibliography(sourcesFolder, "bibtex");
-	}
-
-	/**
-	 * Generate Hayagriva content from all source files
-	 * @deprecated Use generateBibliography(sourcesFolder, 'hayagriva') instead
-	 */
-	async generateHayagrivaFromSources(sourcesFolder: string): Promise<string> {
-		return this.generateBibliography(sourcesFolder, "hayagriva");
 	}
 
 	/**
@@ -479,9 +466,8 @@ export class SourceService {
 			return null;
 		}
 
-		// Get field mappings from settings or use defaults
-		// TODO: Access settings through plugin reference
-		const mappings = DEFAULT_SETTINGS.fieldMappings;
+		// Get field mappings from settings
+		const mappings = this.settings.fieldMappings;
 
 		// Mappings are now: bibliography field -> frontmatter key
 		// So we can use them directly

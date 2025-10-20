@@ -61,7 +61,7 @@ export default class BibliographyManagerPlugin extends Plugin {
 			setCrossrefUserAgent(this.settings.crossrefEmail, false);
 
 			// Initialize services with error handling
-			this.sourceService = new SourceService(this.app);
+			this.sourceService = new SourceService(this.app, this.settings);
 			this.bibliographyExporter = new BibliographyExporter(
 				this.app,
 				this.settings
@@ -172,24 +172,11 @@ export default class BibliographyManagerPlugin extends Plugin {
 						config.sourcesFolder || this.settings.sourcesFolder;
 					const format = config.format || this.settings.bibliographyFormat;
 
-					let bibContent;
-					if (format === "hayagriva") {
-						bibContent =
-							await this.sourceService.generateHayagrivaFromSources(
-								sourcesFolder
-							);
-					} else if (format === "csl-json") {
-						// For now, fall back to BibTeX for CSL-JSON until we implement proper CSL-JSON generation
-						bibContent =
-							await this.sourceService.generateBibTeXFromSources(
-								sourcesFolder
-							);
-					} else {
-						bibContent =
-							await this.sourceService.generateBibTeXFromSources(
-								sourcesFolder
-							);
-					}
+					// Use unified generateBibliography function
+					const bibContent = await this.sourceService.generateBibliography(
+						sourcesFolder,
+						format as 'bibtex' | 'csl-json' | 'hayagriva'
+					);
 
 					if (!bibContent || bibContent.trim() === "") {
 						throw new Error(
@@ -217,17 +204,11 @@ export default class BibliographyManagerPlugin extends Plugin {
 					const format = config.format || this.settings.bibliographyFormat;
 					console.log(`🔧 Exporting bibliography in format: ${format}`);
 
-					if (format === "hayagriva") {
-						bibContent =
-							await this.sourceService.generateHayagrivaFromSources(
-								sourcesFolder
-							);
-					} else {
-						bibContent =
-							await this.sourceService.generateBibTeXFromSources(
-								sourcesFolder
-							);
-					}
+					// Use unified generateBibliography function
+					bibContent = await this.sourceService.generateBibliography(
+						sourcesFolder,
+						format as 'bibtex' | 'csl-json' | 'hayagriva'
+					);
 
 					console.log(`📊 Generated content length: ${bibContent?.length || 0} characters`);
 					console.log(`📝 Writing to path: ${config.outputPath}`);
@@ -364,10 +345,8 @@ export default class BibliographyManagerPlugin extends Plugin {
 	}
 
 	private registerCommands() {
-		// NOTE: Integration tests - change 'false' to 'true' to enable testing commands
 		const commands = getBibliographyCommands(
 			this.app,
-			false,
 			this.settings,
 			this
 		);

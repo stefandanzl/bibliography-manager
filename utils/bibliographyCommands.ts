@@ -97,7 +97,7 @@ export class BibliographyExportModal extends Modal {
 	constructor(app: App, settings: BibliographySettings) {
 		super(app);
 		this.settings = settings;
-		this.sourceService = new SourceService(app);
+		this.sourceService = new SourceService(app, settings);
 	}
 
 	async onOpen() {
@@ -177,11 +177,11 @@ export class BibliographyExportModal extends Modal {
 				const format = this.settings.bibliographyFormat;
 				console.log(`📋 Generating bibliography in format: ${format}`);
 
-				if (format === "hayagriva") {
-					this.bibContent = await this.sourceService.generateHayagrivaFromSources(sourcesFolder);
-				} else {
-					this.bibContent = await this.sourceService.generateBibTeXFromSources(sourcesFolder);
-				}
+				// Use unified generateBibliography function
+				this.bibContent = await this.sourceService.generateBibliography(
+					sourcesFolder,
+					format
+				);
 
 				console.log(`📊 Generated bibliography content length: ${this.bibContent?.length || 0}`);
 			} else {
@@ -855,7 +855,6 @@ export class SourceImportModal extends Modal {
 // Command definitions - pass app instance and settings
 export function getBibliographyCommands(
 	app: App,
-	includeTests: boolean = false,
 	settings: BibliographySettings,
 	plugin?: BibliographyManagerPlugin
 ) {
