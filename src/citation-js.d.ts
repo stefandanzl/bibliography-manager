@@ -3,6 +3,11 @@ declare module "@citation-js/core" {
 	export default class Cite {
 		constructor(data?: any);
 		static add(plugin: any): void;
+		// static plugins: {
+		// 	config: {
+		// 		get(s: string): any;
+		// 	};
+		// };
 		format(format: string, options?: any): any;
 	}
 }

@@ -1,11 +1,35 @@
-import { App, TFile, Notice, normalizePath, TFolder } from "obsidian";
+import {
+	App,
+	TFile,
+	Notice,
+	normalizePath,
+	TFolder,
+	parseYaml,
+	stringifyYaml,
+} from "obsidian";
 import { SourceData, SourceType, BibliographySettings } from "./types";
 import { BIB_FIELDS, DEFAULT_SETTINGS } from "./settings";
 import { CitekeyGenerator } from "./exportbib";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
-import { Cite } from "@citation-js/core";
+import Cite, { plugins } from "@citation-js/core";
+import "@citation-js/plugin-bibtex";
 require("@citation-js/plugin-hayagriva");
+
+// const Cite = require("@citation-js/core").default;
+// require("@citation-js/plugin-doi");
+
+// import Cite, { plugins } from "@citation-js/core";
+// import "@citation-js/plugin-doi";
+// import "@citation-js/plugin-csl";
+
+// Enable using `id` as the cite key label
+console.log(plugins.config.list());
+console.log(plugins.config.get("@bibtex"));
+plugins.config.get("@bibtex").format.useIdAsLabel = true;
+
+// console.warn("GAAAAAAAAAAAA");
+// console.log(new Cite());
 
 export class SourceService {
 	app: App;
@@ -333,7 +357,7 @@ export class SourceService {
 		format: "bibtex" | "csl-json" | "hayagriva"
 	): Promise<string> {
 		const sourceFiles = await this.findAllSourceFiles(sourcesFolder);
-		const citeData: any[] = [];
+		let citeData: any[] = [];
 		const seenCitekeys = new Map<string, { file: TFile; count: number }>();
 		let duplicatesFound = 0;
 
@@ -374,13 +398,32 @@ export class SourceService {
 			}
 		}
 
+		// Proper deduplication - remove duplicates and keep only first occurrence
 		if (duplicatesFound > 0) {
 			console.warn(
 				`Found ${duplicatesFound} duplicate citekeys during bibliography generation`
 			);
-			new Notice(
-				`Found ${duplicatesFound} duplicate sources. Check console for details and clean up your source files.`
+
+			// Deduplicate citeData array, keeping first occurrence of each citekey
+			const uniqueCiteData = [];
+			const processedCitekeys = new Set<string>();
+
+			for (const entry of citeData) {
+				if (!processedCitekeys.has(entry.id)) {
+					uniqueCiteData.push(entry);
+					processedCitekeys.add(entry.id);
+				}
+			}
+
+			console.log(
+				`Deduplicated from ${citeData.length} to ${uniqueCiteData.length} entries`
 			);
+			new Notice(
+				`Found ${duplicatesFound} duplicate sources. Deduplicated to ${uniqueCiteData.length} unique entries.`
+			);
+
+			// Replace citeData with deduplicated version
+			citeData = uniqueCiteData;
 		}
 
 		if (citeData.length === 0) {
@@ -399,7 +442,38 @@ export class SourceService {
 						lang: "en-US",
 					});
 				case "hayagriva":
-					return cite.format("hayagriva");
+					let yamlOutput = cite.format("hayagriva");
+
+					// Post-process YAML to add missing type: misc entries
+					try {
+						// Parse YAML back to object
+						const yamlData = parseYaml(yamlOutput);
+
+						// Add type: misc to entries that don't have a type
+						if (yamlData && typeof yamlData === "object") {
+							Object.keys(yamlData).forEach((citekey) => {
+								const entry = yamlData[citekey];
+								if (
+									entry &&
+									typeof entry === "object" &&
+									!entry.type
+								) {
+									entry.type = "misc";
+								}
+							});
+
+							// Convert back to YAML string
+							yamlOutput = stringifyYaml(yamlData);
+						}
+					} catch (error) {
+						console.warn(
+							"Failed to post-process Hayagriva YAML, continuing with original output:",
+							error
+						);
+						// Continue with original output if parsing fails
+					}
+
+					return yamlOutput;
 				case "csl-json":
 					// return cite.format("data", { format: "object" });
 					return JSON.stringify(citeData, null, 2);
