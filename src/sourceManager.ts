@@ -170,7 +170,7 @@ export class SourceImportModal extends Modal {
 			// Clean DOI input
 			const cleanDOI = doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
 
-			const citation = await Cite.async(cleanDOI);
+			const citation = await Cite(cleanDOI);
 			const data = citation.data;
 
 			if (!data || data.length === 0) {
@@ -188,7 +188,7 @@ export class SourceImportModal extends Modal {
 			// Clean ISBN input
 			const cleanISBN = isbn.replace(/[-\s]/g, "");
 
-			const citation = await Cite.async(cleanISBN);
+			const citation = await Cite(cleanISBN);
 			const data = citation.data;
 
 			if (!data || data.length === 0) {
@@ -203,7 +203,7 @@ export class SourceImportModal extends Modal {
 
 	private async importFromURL(url: string): Promise<SourceData | null> {
 		try {
-			const citation = await Cite.async(url);
+			const citation = await Cite(url);
 			const data = citation.data;
 
 			if (!data || data.length === 0) {
@@ -220,7 +220,7 @@ export class SourceImportModal extends Modal {
 
 	private async importFromBibTeX(bibtex: string): Promise<SourceData | null> {
 		try {
-			const citation = await Cite.async(bibtex);
+			const citation = await Cite(bibtex);
 			const data = citation.data;
 
 			if (!data || data.length === 0) {

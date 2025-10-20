@@ -69,17 +69,25 @@ initializeCiteJS().then(() => {
 	console.error("Failed to initialize citation-js:", err);
 });
 
-// Cite constructor that ensures initialization is complete
-const Cite = function(...args: any[]) {
+// Cite factory that ensures initialization is complete
+const createCite = async function(...args: any[]) {
 	if (!CiteConstructor) {
-		throw new Error("Citation-js not initialized yet");
+		await initializeCiteJS();
 	}
 	return new CiteConstructor(...args);
 };
 
 // Export util as well
-export const util = citationUtil;
-export { Cite };
+export const util = citationUtil || {
+	// Provide basic util functions if citation-js not ready
+	setUserAgent: (userAgent: string) => {
+		console.log("Setting User-Agent (not fully initialized):", userAgent);
+	}
+};
+
+// Export Cite as both factory and constructor for backward compatibility
+export const Cite = createCite;
+export { createCite };
 
 // console.warn("GAAAAAAAAAAAA");
 // console.log(new Cite());
@@ -486,7 +494,7 @@ export class SourceService {
 
 		try {
 			// Use citation-js to format as requested
-			const cite = new Cite(citeData);
+			const cite = await Cite(citeData);
 
 			switch (format) {
 				case "bibtex":

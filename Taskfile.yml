@@ -23,6 +23,16 @@ tasks:
             # - cp styles.css '{{.DIR_PLUGIN}}/styles.css'
             - cp manifest.json '{{.DIR_PLUGIN}}/manifest.json'
 
+    copy-vendor:
+        aliases: [vendor]
+        cmds:
+            - cp vendor.js '{{.DIR_PLUGIN}}/vendor.js'
+
+    copy-all:
+        cmds:
+            - task: copy
+            - task: copy-vendor
+
     build:
         cmds:
             - npm run build:split

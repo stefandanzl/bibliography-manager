@@ -26,3 +26,8 @@ declare module "@citation-js/plugin-isbn" {
 	const plugin: any;
 	export default plugin;
 }
+
+declare module "@citation-js/plugin-hayagriva" {
+	const plugin: any;
+	export default plugin;
+}

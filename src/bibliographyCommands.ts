@@ -544,7 +544,7 @@ export class SourceImportModal extends Modal {
 
 			new Notice("Fetching metadata from URL...");
 
-			const cite = await Cite.async(this.sourceData.url);
+			const cite = await Cite(this.sourceData.url);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -584,7 +584,7 @@ export class SourceImportModal extends Modal {
 				""
 			);
 
-			const cite = await Cite.async(cleanDOI);
+			const cite = await Cite(cleanDOI);
 			const data = await cite.format("data", { format: "object" });
 
 			console.warn("Lookup DOI");
@@ -623,7 +623,7 @@ export class SourceImportModal extends Modal {
 
 			new Notice("Parsing BibTeX...");
 
-			const cite = await Cite.async(this.sourceData.bibtex);
+			const cite = await Cite(this.sourceData.bibtex);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
@@ -661,7 +661,7 @@ export class SourceImportModal extends Modal {
 			// Clean ISBN input
 			const cleanISBN = this.sourceData.isbn.replace(/[-\s]/g, "");
 
-			const cite = await Cite.async(cleanISBN);
+			const cite = await Cite(cleanISBN);
 			const data = await cite.format("data", { format: "object" });
 
 			if (!data || data.length === 0) {
