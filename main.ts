@@ -12,38 +12,15 @@ import { BibliographySettings, DEFAULT_SETTINGS } from "./settings";
 // API interface that other plugins can use
 export interface BibliographyAPI {
 	/**
-	 * Generate BibTeX content from sources
+	 * Generate bibliography content from sources
+	 * @param config.sourcesFolder - Source files folder (defaults to plugin settings)
+	 * @param config.format - Export format: bibtex, csl-json, or hayagriva (defaults to plugin settings)
+	 * @returns Bibliography content as string
 	 */
 	generateBibliography(config?: {
 		sourcesFolder?: string;
-		bibliographyFile?: string;
-		includeFiles?: string[];
 		format?: "bibtex" | "csl-json" | "hayagriva";
 	}): Promise<string>;
-
-	/**
-	 * Export bibliography to a specific path
-	 */
-	exportBibliographyToPath(config: {
-		sourcesFolder?: string;
-		outputPath: string;
-		format?: "bibtex" | "csl-json" | "hayagriva";
-	}): Promise<string>;
-
-	/**
-	 * Get all sources from folder
-	 */
-	getAllSources(sourcesFolder?: string): Promise<SourceData[]>;
-
-	/**
-	 * Import a new source
-	 */
-	importSource(sourceData: Partial<SourceData>): Promise<string>;
-
-	/**
-	 * Generate citekey for source data
-	 */
-	generateCitekey(sourceData: Partial<SourceData>): string;
 }
 
 export default class BibliographyManagerPlugin extends Plugin {
@@ -165,17 +142,18 @@ export default class BibliographyManagerPlugin extends Plugin {
 
 	private createAPI(): BibliographyAPI {
 		return {
-			// Generate bibliography content from sources
+			// Generate bibliography content from sources using existing workflow
 			generateBibliography: async (config = {}) => {
 				try {
+					// Use plugin settings as fallback for all optional parameters
 					const sourcesFolder =
 						config.sourcesFolder || this.settings.sourcesFolder;
 					const format = config.format || this.settings.bibliographyFormat;
 
-					// Use unified generateBibliography function
+					// Use existing sourceService method
 					const bibContent = await this.sourceService.generateBibliography(
 						sourcesFolder,
-						format as 'bibtex' | 'csl-json' | 'hayagriva'
+						format
 					);
 
 					if (!bibContent || bibContent.trim() === "") {
@@ -184,161 +162,10 @@ export default class BibliographyManagerPlugin extends Plugin {
 						);
 					}
 
-					console.log(`Generated ${format} bibliography from ${sourcesFolder}`);
 					return bibContent;
 				} catch (error) {
-					console.error("Failed to generate bibliography:", error);
+					console.error("API: Failed to generate bibliography:", error);
 					throw error;
-				}
-			},
-
-			// Export bibliography to a specific path
-			exportBibliographyToPath: async (config) => {
-				console.log("🚀 exportBibliographyToPath called with config:", config);
-				try {
-					const sourcesFolder =
-						config.sourcesFolder || this.settings.sourcesFolder;
-					console.log("📂 Using sources folder:", sourcesFolder);
-
-					let bibContent;
-					const format = config.format || this.settings.bibliographyFormat;
-					console.log(`🔧 Exporting bibliography in format: ${format}`);
-
-					// Use unified generateBibliography function
-					bibContent = await this.sourceService.generateBibliography(
-						sourcesFolder,
-						format as 'bibtex' | 'csl-json' | 'hayagriva'
-					);
-
-					console.log(`📊 Generated content length: ${bibContent?.length || 0} characters`);
-					console.log(`📝 Writing to path: ${config.outputPath}`);
-
-					// Ensure output directory exists
-					const outputDir = config.outputPath.substring(
-						0,
-						config.outputPath.lastIndexOf("/")
-					);
-					console.log(`📁 Output directory: ${outputDir}`);
-
-					if (
-						outputDir &&
-						!(await this.app.vault.adapter.exists(outputDir))
-					) {
-						console.log(`📁 Creating directory: ${outputDir}`);
-						await this.app.vault.adapter.mkdir(outputDir);
-					}
-
-					// Write bibliography file
-					console.log(`✍️ Writing bibliography file...`);
-					await this.app.vault.adapter.write(
-						config.outputPath,
-						bibContent
-					);
-
-					new Notice(`Bibliography exported to ${config.outputPath}`);
-					console.log(
-						`Bibliography exported to ${config.outputPath}`
-					);
-					return config.outputPath;
-				} catch (error) {
-					console.error("Failed to export bibliography:", error);
-					throw error;
-				}
-			},
-
-			// Get all sources from folder
-			getAllSources: async (sourcesFolder?: string) => {
-				try {
-					const folder = sourcesFolder || this.settings.sourcesFolder;
-					const sourceFiles =
-						await this.sourceService.findAllSourceFiles(folder);
-					const sources: SourceData[] = [];
-
-					for (const file of sourceFiles) {
-						const cache = this.app.metadataCache.getFileCache(file);
-						const frontmatter = cache?.frontmatter;
-
-						if (frontmatter && frontmatter.citekey) {
-							sources.push({
-								citekey: frontmatter.citekey || "",
-								author: frontmatter.author || [],
-								category: frontmatter.category || [],
-								bibtype: frontmatter.bibtype || "misc",
-								title: frontmatter.title || file.basename,
-								year: frontmatter.year?.toString(),
-								pages: frontmatter.pages
-									? parseInt(frontmatter.pages)
-									: undefined,
-								abstract: frontmatter.abstract,
-								publisher: frontmatter.publisher,
-								journal: frontmatter.journal,
-								volume: frontmatter.volume,
-								number: frontmatter.number,
-								doi: frontmatter.doi,
-								isbn: frontmatter.isbn,
-								url: frontmatter.url,
-								downloadurl: frontmatter.downloadurl,
-								imageurl: frontmatter.imageurl,
-								added: frontmatter.added,
-								started: frontmatter.started,
-								ended: frontmatter.ended,
-								rating: frontmatter.rating,
-								currentpage: frontmatter.currentpage,
-								status: frontmatter.status,
-								filelink: frontmatter.filelink,
-								aliases: frontmatter.aliases,
-							});
-						}
-					}
-
-					return sources;
-				} catch (error) {
-					console.error("Failed to get all sources:", error);
-					throw error;
-				}
-			},
-
-			// Import a new source
-			importSource: async (sourceData) => {
-				try {
-					const sourcesFolder = this.settings.sourcesFolder;
-					const newFile = await this.sourceService.createSourceFile(
-						sourceData as SourceData,
-						sourcesFolder,
-						this.settings.sourceNoteTemplate
-					);
-
-					if (newFile) {
-						new Notice(`Source imported: ${newFile.basename}`);
-						return newFile.path;
-					} else {
-						throw new Error("Failed to create source file");
-					}
-				} catch (error) {
-					console.error("Failed to import source:", error);
-					throw error;
-				}
-			},
-
-			// Generate citekey for source data
-			generateCitekey: (sourceData) => {
-				try {
-					const authors = sourceData.author || [];
-					const year = sourceData.year
-						? parseInt(sourceData.year.toString())
-						: new Date().getFullYear();
-					const title = sourceData.title || "Untitled";
-
-					return CitekeyGenerator.generateFromTitleAndAuthors(
-						title,
-						authors,
-						year
-					);
-				} catch (error) {
-					console.error("Failed to generate citekey:", error);
-					// Fallback to a simple citekey
-					const timestamp = Date.now().toString(36);
-					return `SRC${timestamp}`;
 				}
 			},
 		};
@@ -388,10 +215,12 @@ export default class BibliographyManagerPlugin extends Plugin {
 					const outputFolder = this.settings.bibliographyOutputFolder || this.settings.sourcesFolder;
 					const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
 
-					await this.api.exportBibliographyToPath({
-						outputPath: bibPath,
-						format: this.settings.bibliographyFormat
-					});
+					// Generate bibliography using API
+					const bibContent = await this.api.generateBibliography();
+
+					// Write to file
+					await this.app.vault.adapter.write(bibPath, bibContent);
+					new Notice(`Bibliography exported to ${bibPath}`);
 				} catch (error) {
 					new Notice(
 						`Failed to generate bibliography: ${error.message}`

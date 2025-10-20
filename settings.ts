@@ -460,7 +460,7 @@ export class BibliographySettingTab extends PluginSettingTab {
 
 		const apiInfo = containerEl.createDiv();
 		apiInfo.createEl("p", {
-			text: "Other plugins can access this plugin's API through:",
+			text: "Other plugins can access this plugin's API to generate bibliography content:",
 			cls: "setting-item-description",
 		});
 
@@ -468,9 +468,14 @@ export class BibliographySettingTab extends PluginSettingTab {
 		codeBlock.createEl("code", {
 			text: `const bibPlugin = app.plugins.plugins['bibliography-manager'];
 if (bibPlugin?.api) {
+  // Generate with custom settings
   const bibContent = await bibPlugin.api.generateBibliography({
-    sourcesFolder: 'sources'
+    sourcesFolder: 'sources',  // optional, defaults to plugin settings
+    format: 'bibtex'           // optional: 'bibtex', 'csl-json', 'hayagriva'
   });
+
+  // Or use plugin defaults
+  const bibContent = await bibPlugin.api.generateBibliography();
 }`,
 		});
 
