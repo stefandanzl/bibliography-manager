@@ -17,32 +17,17 @@ let utilInstance: any = null;
 async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
 
-	// Use dynamic import for proper module loading
-	const citationCore = await import("@citation-js/core");
+	// Node.js environment - try to require external modules
+		// These should be available because they're bundled in vendor.js
+		let core: any;
 
-	// Get the Cite class
-	CiteConstructor =
-		(citationCore as any).default?.Cite ||
-		(citationCore as any).Cite ||
-		(citationCore as any).default;
+		try {
+			core = require("@citation-js/core");
+		} catch (requireError) {
+			throw new Error(`Citation-js not available. Make sure vendor.js is in same directory: ${requireError}`);
+		}
 
-	if (!CiteConstructor) {
-		throw new Error("Could not find Cite constructor in citation-js/core");
-	}
-
-	// Load bibtex plugin - this is required
-	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
-	const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
-
-	if (!pluginConfig) {
-		throw new Error("Could not load @citation-js/plugin-bibtex");
-	}
-
-	if (typeof CiteConstructor.add !== "function") {
-		throw new Error("Cite constructor does not support plugin loading");
-	}
-
-	CiteConstructor.add(pluginConfig);
+		CiteConstructor = core.Cite || core.default?.Cite || core.default;
 
 	return CiteConstructor;
 }

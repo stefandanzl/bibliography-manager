@@ -19,58 +19,103 @@ let citationUtil: any = null;
 async function initializeCiteJS() {
 	if (CiteConstructor) return CiteConstructor;
 
-	// Use dynamic import for proper module loading
-	const citationCore = await import("@citation-js/core");
-	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
-	const hayagrivaPlugin = await import("@citation-js/plugin-hayagriva");
+	try {
+		// In Obsidian plugin environment, we need to load vendor.js first
+		// Try multiple approaches to access citation-js modules
 
-	// Get the Cite class and util
-	CiteConstructor =
-		(citationCore as any).default?.Cite ||
-		(citationCore as any).Cite ||
-		(citationCore as any).default;
+		let core: any, bibtex: any, hayagriva: any;
 
-	// Get the util object
-	citationUtil = (citationCore as any).default?.util || (citationCore as any).util;
-
-	if (!CiteConstructor) {
-		throw new Error("Could not find Cite constructor in citation-js/core");
-	}
-
-	// Load bibtex plugin
-	const bibtexConfig = (bibtexPlugin as any).default || bibtexPlugin;
-	if (typeof CiteConstructor.add === "function") {
-		CiteConstructor.add(bibtexConfig);
-	}
-
-	// Load hayagriva plugin
-	const hayagrivaConfig = (hayagrivaPlugin as any).default || hayagrivaPlugin;
-	if (typeof CiteConstructor.add === "function") {
-		CiteConstructor.add(hayagrivaConfig);
-	}
-
-	// Enable using `id` as the cite key label
-	const plugins = CiteConstructor.plugins || {};
-	if (plugins.config && plugins.config.get) {
+		// Approach 1: Try to require from current directory
 		try {
-			plugins.config.get("@bibtex").format.useIdAsLabel = true;
-		} catch (e) {
-			console.log("Could not configure bibtex plugin format:", e);
-		}
-	}
+			const fs = require("fs");
+			const path = require("path");
+			const vendorPath = path.join(__dirname, "vendor.js");
 
-	return CiteConstructor;
+			if (fs.existsSync(vendorPath)) {
+				// Load vendor.js if it exists in the same directory
+				require(vendorPath);
+				console.log("Loaded vendor.js from", vendorPath);
+			}
+		} catch (fsError) {
+			console.warn("Could not check for vendor.js file:", fsError);
+		}
+
+		// Approach 2: Try to require modules (should work if vendor.js loaded properly)
+		try {
+			core = require("@citation-js/core");
+			bibtex = require("@citation-js/plugin-bibtex");
+			hayagriva = require("@citation-js/plugin-hayagriva");
+			console.log("Successfully required citation-js modules");
+		} catch (requireError) {
+			// Approach 3: Try to access global/window if in browser environment
+			if (typeof window !== "undefined") {
+				// Type assertion for window with custom properties
+				const win = window as any;
+				core = win["@citation-js/core"];
+				bibtex = win["@citation-js/plugin-bibtex"];
+				hayagriva = win["@citation-js/plugin-hayagriva"];
+				console.log("Loaded citation-js from window object");
+			}
+
+			if (!core) {
+				throw new Error(`Citation-js modules not available. Make sure vendor.js is in same directory as main.js: ${requireError}`);
+			}
+		}
+
+		// Extract Cite constructor from the loaded module
+		CiteConstructor = core.Cite || core.default?.Cite || core.default || core;
+		citationUtil = core.util || core.default?.util || {};
+
+		if (!CiteConstructor) {
+			throw new Error("Could not find Cite constructor in @citation-js/core");
+		}
+
+		// Add plugins if not already added
+		if (CiteConstructor && CiteConstructor.add) {
+			try {
+				if (bibtex) {
+					const bibtexConfig = bibtex.default || bibtex;
+					CiteConstructor.add(bibtexConfig);
+				}
+
+				if (hayagriva) {
+					const hayagrivaConfig = hayagriva.default || hayagriva;
+					CiteConstructor.add(hayagrivaConfig);
+				}
+			} catch (pluginError) {
+				console.error("Failed to add citation-js plugins:", pluginError);
+			}
+		}
+
+		// Enable using `id` as the cite key label
+		try {
+			const plugins = CiteConstructor.plugins || {};
+			if (plugins.config && plugins.config.get) {
+				plugins.config.get("@bibtex").format.useIdAsLabel = true;
+			}
+		} catch (configError) {
+			console.log("Could not configure bibtex plugin format:", configError);
+		}
+
+		console.log("Citation-js initialized successfully");
+		return CiteConstructor;
+	} catch (error) {
+		console.error("Failed to initialize citation-js:", error);
+		throw new Error(`Failed to initialize citation-js: ${error}`);
+	}
 }
 
 // Initialize citation-js on module load (but still async)
-initializeCiteJS().then(() => {
-	console.log("Citation-js plugins loaded");
-}).catch(err => {
-	console.error("Failed to initialize citation-js:", err);
-});
+initializeCiteJS()
+	.then(() => {
+		console.log("Citation-js plugins loaded");
+	})
+	.catch((err) => {
+		console.error("Failed to initialize citation-js:", err);
+	});
 
 // Cite factory that ensures initialization is complete
-const createCite = async function(...args: any[]) {
+const createCite = async function (...args: any[]) {
 	if (!CiteConstructor) {
 		await initializeCiteJS();
 	}
@@ -82,7 +127,7 @@ export const util = citationUtil || {
 	// Provide basic util functions if citation-js not ready
 	setUserAgent: (userAgent: string) => {
 		console.log("Setting User-Agent (not fully initialized):", userAgent);
-	}
+	},
 };
 
 // Export Cite as both factory and constructor for backward compatibility
