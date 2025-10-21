@@ -1,9 +1,3 @@
-import { App, Notice, Modal } from "obsidian";
-import BibliographyManagerPlugin from "./main";
-import { SourceData, SourceType, ImportMethod } from "./types";
-import { CitekeyGenerator } from "./exportbib";
-import { JatsFormatter } from "./jatsFormatter";
-
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite, util } from "@citation-js/core";
 import "@citation-js/plugin-doi";
@@ -11,53 +5,24 @@ import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
 // Note: wikidata plugin removed to save 2.5MB bundle size
 
-// Set User-Agent for Crossref API if email is provided
-export function setCrossrefUserAgent(email: string, showNotifications: boolean = true) {
-    if (email) {
-        try {
-            // Try to get version - works in both Node.js and browser
-            let version = "unknown";
-            try {
-                if (typeof require !== 'undefined') {
-                    version = require("@citation-js/core").version;
-                } else if (typeof window !== 'undefined') {
-                    // Browser environment - try to get version from global
-                    version = (window as any).citationjs?.version || "unknown";
-                }
-            } catch (e) {
-                console.warn("Could not get citation-js version:", e);
-            }
-
-            // Set User-Agent - util should be available from @citation-js/core
-            const userAgent = `Bibliography-Manager-Obsidian-Plugin (mailto:${email}) Citation.js/${version}`;
-            if (typeof util !== 'undefined') {
-                util.setUserAgent(userAgent);
-                console.log("User-Agent set:", userAgent);
-            } else {
-                console.warn("citation-js util not available, User-Agent not set");
-            }
-        } catch (error) {
-            console.error("Failed to set User-Agent:", error);
-        }
-    } else if (showNotifications) {
-        // Show notification that no email is provided
-        if (typeof window !== 'undefined' && (window as any).app) {
-            // Obsidian environment
-            const { Notice } = require("obsidian");
-            new Notice("No Crossref email provided. DOI lookups may have lower rate limits. Add your email in plugin settings for better performance.", 8000);
-        }
-        console.warn("No Crossref email provided. Add your email in plugin settings for better API rate limits.");
-    }
-}
-
-
+// import Cite from "@citation-js/core";
+import { Modal, App, TextAreaComponent, Notice } from "obsidian";
+// import { CitekeyGenerator } from "src/exportbib";
+import { JatsFormatter } from "src/utils/jatsFormatter";
+import BibliographyManagerPlugin from "src/main";
+import { ImportMethod, SourceData, SourceType } from "src/types/interfaces";
+import { CitekeyGenerator } from "src/utils/citekey";
 
 export class SourceImportModal extends Modal {
 	plugin: BibliographyManagerPlugin;
 	currentMethod: ImportMethod;
 	private onImport: (data: SourceData) => void;
 
-	constructor(app: App, plugin: BibliographyManagerPlugin, onImport: (data: SourceData) => void) {
+	constructor(
+		app: App,
+		plugin: BibliographyManagerPlugin,
+		onImport: (data: SourceData) => void
+	) {
 		super(app);
 		this.plugin = plugin;
 		this.currentMethod = "doi";
@@ -75,31 +40,51 @@ export class SourceImportModal extends Modal {
 		const methodContainer = contentEl.createDiv("source-import-methods");
 		methodContainer.createEl("h3", { text: "Import Method:" });
 
-		const methodButtons: { method: ImportMethod; label: string; placeholder: string }[] = [
+		const methodButtons: {
+			method: ImportMethod;
+			label: string;
+			placeholder: string;
+		}[] = [
 			{ method: "doi", label: "DOI", placeholder: "10.1234/example.doi" },
 			{ method: "isbn", label: "ISBN", placeholder: "978-0-123456-78-9" },
-			{ method: "url", label: "URL", placeholder: "https://example.com/article" },
-			{ method: "bibtex", label: "BibTeX", placeholder: "@article{...}" }
+			{
+				method: "url",
+				label: "URL",
+				placeholder: "https://example.com/article",
+			},
+			{ method: "bibtex", label: "BibTeX", placeholder: "@article{...}" },
 		];
 
 		const inputContainer = contentEl.createDiv("source-import-input");
-		const inputEl = inputContainer.createEl("textarea", {
-			attr: { placeholder: methodButtons[0].placeholder },
-			cls: "source-import-textarea"
-		});
-		inputEl.rows = 4;
 
-		const methodButtonContainer = methodContainer.createDiv("method-buttons");
+		const inputEl = new TextAreaComponent(inputContainer).setPlaceholder(
+			methodButtons[0].placeholder
+		).inputEl;
+
+		//  = inputContainer.createEl("textarea", {
+		// 	attr: { placeholder: methodButtons[0].placeholder },
+		// 	cls: "bibliography-bibtex-import-textarea",
+		// });
+		inputEl.rows = 12;
+		inputEl.style.width = "200px";
+		inputEl.style.minHeight = "300px";
+		inputEl.style.resize = "none";
+
+		const methodButtonContainer =
+			methodContainer.createDiv("method-buttons");
 		methodButtons.forEach(({ method, label, placeholder }) => {
 			const button = methodButtonContainer.createEl("button", {
 				text: label,
-				cls: `method-button ${this.currentMethod === method ? "active" : ""}`
+				cls: `method-button ${
+					this.currentMethod === method ? "active" : ""
+				}`,
 			});
 
 			button.onclick = () => {
 				// Update active state
-				methodButtonContainer.querySelectorAll(".method-button").forEach(btn =>
-					btn.removeClass("active"));
+				methodButtonContainer
+					.querySelectorAll(".method-button")
+					.forEach((btn) => btn.removeClass("active"));
 				button.addClass("active");
 
 				this.currentMethod = method;
@@ -112,7 +97,7 @@ export class SourceImportModal extends Modal {
 		// Paste button
 		const pasteButton = inputContainer.createEl("button", {
 			text: "📋 Paste",
-			cls: "paste-button"
+			cls: "paste-button",
 		});
 		pasteButton.onclick = async () => {
 			try {
@@ -126,7 +111,7 @@ export class SourceImportModal extends Modal {
 		// Import button
 		const importButton = contentEl.createEl("button", {
 			text: "Import Source",
-			cls: "mod-cta"
+			cls: "mod-cta",
 		});
 		importButton.onclick = () => this.handleImport(inputEl.value);
 
@@ -164,7 +149,11 @@ export class SourceImportModal extends Modal {
 			}
 		} catch (error) {
 			console.error("Import error:", error);
-			new Notice(`Import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			new Notice(
+				`Import failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
 		}
 	}
 
@@ -182,7 +171,11 @@ export class SourceImportModal extends Modal {
 
 			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
-			throw new Error(`DOI lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			throw new Error(
+				`DOI lookup failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
 		}
 	}
 
@@ -200,7 +193,11 @@ export class SourceImportModal extends Modal {
 
 			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
-			throw new Error(`ISBN lookup failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			throw new Error(
+				`ISBN lookup failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
 		}
 	}
 
@@ -232,22 +229,31 @@ export class SourceImportModal extends Modal {
 
 			return this.convertCitationDataToSourceData(data[0]);
 		} catch (error) {
-			throw new Error(`BibTeX parsing failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			throw new Error(
+				`BibTeX parsing failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
 		}
 	}
 
-	private async convertCitationDataToSourceData(citationData: any): Promise<SourceData> {
+	private async convertCitationDataToSourceData(
+		citationData: any
+	): Promise<SourceData> {
 		// Extract authors using shared CitekeyGenerator method
-		const authors = CitekeyGenerator.extractAuthorsFromCitationData(citationData);
+		const authors =
+			CitekeyGenerator.extractAuthorsFromCitationData(citationData);
 
 		// Extract year
-		const year = citationData.issued?.["date-parts"]?.[0]?.[0] ||
-				   citationData.published?.["date-parts"]?.[0]?.[0] ||
-				   citationData.year ||
-				   new Date().getFullYear();
+		const year =
+			citationData.issued?.["date-parts"]?.[0]?.[0] ||
+			citationData.published?.["date-parts"]?.[0]?.[0] ||
+			citationData.year ||
+			new Date().getFullYear();
 
 		// Generate citation key if not present, using CitekeyGenerator
-		let citekey = citationData["citation-key"] ||
+		let citekey =
+			citationData["citation-key"] ||
 			CitekeyGenerator.generateFromTitleAndAuthors(
 				citationData.title || "Untitled Source",
 				authors,
@@ -269,7 +275,11 @@ export class SourceImportModal extends Modal {
 			title: citationData.title || "Untitled Source",
 			aliases: [`@${citekey}`],
 			abstract: citationData.abstract,
-			abstractmd: citationData.abstract ? await JatsFormatter.formatJatsToMarkdown(citationData.abstract) : undefined,
+			abstractmd: citationData.abstract
+				? await JatsFormatter.formatJatsToMarkdown(
+						citationData.abstract
+				  )
+				: undefined,
 			publisher: citationData.publisher,
 			journal: citationData["container-title"],
 			volume: citationData.volume,
@@ -329,5 +339,4 @@ export class SourceImportModal extends Modal {
 
 		return "other";
 	}
-
-	}
+}

@@ -8,8 +8,11 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { BibliographySettings, FORMAT_EXTENSION_MAPPING } from "./types";
-import { CitekeyGenerator, SourceImporter } from "./exportbib";
+import {
+	BibliographySettings,
+	FORMAT_EXTENSION_MAPPING,
+} from "./types/interfaces";
+// import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "./main";
 import { SourceService } from "./sourceService";
 
@@ -18,6 +21,9 @@ import { Cite } from "@citation-js/core";
 import "@citation-js/plugin-doi";
 import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
+import { loadTemplateFile } from "./utils/template";
+import { CitekeyGenerator } from "./utils/citekey";
+import { SourceImporter } from "./utils/soureImporter";
 // Note: wikidata plugin removed to save 2.5MB bundle size
 
 export class GenerateCitekeyCommand {
@@ -281,25 +287,31 @@ export class SourceImportModal extends Modal {
 		this.sourceData.author = citationData.author
 			? CitekeyGenerator.extractAuthorsFromCitationData(citationData)
 			: this.sourceData.author;
-		this.sourceData.year = citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
+		this.sourceData.year =
+			citationData.issued?.["date-parts"]?.[0]?.[0]?.toString() ||
 			citationData.published?.["date-parts"]?.[0]?.[0]?.toString() ||
 			citationData.year?.toString() ||
 			this.sourceData.year;
 		this.sourceData.abstract = citationData.abstract;
 
 		// Update bibliographic fields
-		this.sourceData.journal = citationData["container-title"] || this.sourceData.journal;
-		this.sourceData.publisher = citationData.publisher || this.sourceData.publisher;
+		this.sourceData.journal =
+			citationData["container-title"] || this.sourceData.journal;
+		this.sourceData.publisher =
+			citationData.publisher || this.sourceData.publisher;
 		this.sourceData.doi = citationData.DOI || this.sourceData.doi;
 		this.sourceData.isbn = citationData.ISBN || this.sourceData.isbn;
-		this.sourceData.url = citationData.URL || citationData.url || this.sourceData.url;
-		this.sourceData.pages = citationData.page ? parseInt(citationData.page) : undefined;
+		this.sourceData.url =
+			citationData.URL || citationData.url || this.sourceData.url;
+		this.sourceData.pages = citationData.page
+			? parseInt(citationData.page)
+			: undefined;
 		this.sourceData.volume = citationData.volume || this.sourceData.volume;
 		this.sourceData.number = citationData.issue || this.sourceData.number;
 
 		// Set bibtype directly from citation-js (already correct BibTeX/CSL type)
-		this.sourceData.bibtype = citationData.type ||
-			(this.mediaType === "Book" ? "book" : "misc");
+		this.sourceData.bibtype =
+			citationData.type || (this.mediaType === "Book" ? "book" : "misc");
 
 		// Handle keywords if they exist
 		if (citationData.keyword) {
@@ -599,7 +611,10 @@ export class SourceImportModal extends Modal {
 			this.processCitationData(data[0]);
 
 			// DOI-specific bibtype fallback (for academic papers)
-			if (!this.sourceData.bibtype || this.sourceData.bibtype === "misc") {
+			if (
+				!this.sourceData.bibtype ||
+				this.sourceData.bibtype === "misc"
+			) {
 				this.sourceData.bibtype = "paper";
 			}
 
@@ -725,7 +740,7 @@ export class SourceImportModal extends Modal {
 		try {
 			// Load template file right before using it
 			if (this.plugin) {
-				await this.plugin.loadTemplateFile();
+				await loadTemplateFile(this.plugin);
 			}
 
 			const importer = new SourceImporter(

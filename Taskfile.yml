@@ -20,7 +20,7 @@ tasks:
     copy:
         cmds:
             - cp main.js '{{.DIR_PLUGIN}}/main.js'
-            # - cp styles.css '{{.DIR_PLUGIN}}/styles.css'
+            - cp styles.css '{{.DIR_PLUGIN}}/styles.css'
             - cp manifest.json '{{.DIR_PLUGIN}}/manifest.json'
 
     build:

@@ -7,70 +7,14 @@ import {
 	stringifyYaml,
 } from "obsidian";
 // No Handlebars import - we'll use simple regex replacement
-import type { BibliographySettings } from "./types";
-import { FORMAT_EXTENSION_MAPPING } from "./types";
-
-// Initialize citation-js properly for browser environment
-let CiteConstructor: any = null;
-let utilInstance: any = null;
-
-async function initializeCiteJS() {
-	if (CiteConstructor) return CiteConstructor;
-
-	// Use dynamic import for proper module loading
-	const citationCore = await import("@citation-js/core");
-
-	// Get the Cite class
-	CiteConstructor =
-		(citationCore as any).default?.Cite ||
-		(citationCore as any).Cite ||
-		(citationCore as any).default;
-
-	if (!CiteConstructor) {
-		throw new Error("Could not find Cite constructor in citation-js/core");
-	}
-
-	// Load bibtex plugin - this is required
-	const bibtexPlugin = await import("@citation-js/plugin-bibtex");
-	const pluginConfig = (bibtexPlugin as any).default || bibtexPlugin;
-
-	if (!pluginConfig) {
-		throw new Error("Could not load @citation-js/plugin-bibtex");
-	}
-
-	if (typeof CiteConstructor.add !== "function") {
-		throw new Error("Cite constructor does not support plugin loading");
-	}
-
-	CiteConstructor.add(pluginConfig);
-
-	return CiteConstructor;
-}
-
-export interface SourceData {
-	citekey: string;
-	title: string;
-	author: string[];
-	year: number;
-	type: "book" | "article" | "inproceedings" | "website" | "misc";
-	journal?: string;
-	publisher?: string;
-	pages?: string;
-	volume?: string;
-	issue?: string;
-	doi?: string;
-	isbn?: string;
-	url?: string;
-	abstract?: string;
-	keywords?: string[];
-	note?: string;
-	filepath: string; // Path to the source file
-}
-
-export interface BibliographyConfig {
-	mode: "directory" | "file";
-	path: string;
-}
+import type {
+	BibliographyConfig,
+	BibliographySettings,
+	SourceData2,
+} from "./types/interfaces";
+import { FORMAT_EXTENSION_MAPPING } from "./types/interfaces";
+import { CitekeyGenerator } from "./utils/citekey";
+import { initializeCiteJS } from "./setup";
 
 export class BibliographyExporter {
 	constructor(private app: App, private settings: BibliographySettings) {}
@@ -166,8 +110,8 @@ export class BibliographyExporter {
 	private async collectSources(
 		config: BibliographyConfig | null,
 		currentFile: TFile | null
-	): Promise<SourceData[]> {
-		const sourcesMap = new Map<string, SourceData>(); // Use citekey as key
+	): Promise<SourceData2[]> {
+		const sourcesMap = new Map<string, SourceData2>(); // Use citekey as key
 
 		// Priority 1: typst_bib directory sources
 		if (config && config.mode === "directory") {
@@ -201,8 +145,10 @@ export class BibliographyExporter {
 		return Array.from(sourcesMap.values());
 	}
 
-	private async collectFromDirectory(dirPath: string): Promise<SourceData[]> {
-		const sources: SourceData[] = [];
+	private async collectFromDirectory(
+		dirPath: string
+	): Promise<SourceData2[]> {
+		const sources: SourceData2[] = [];
 		const dir = this.app.vault.getAbstractFileByPath(dirPath);
 
 		if (!(dir instanceof TFolder)) {
@@ -238,7 +184,7 @@ export class BibliographyExporter {
 
 	private async extractSourceFromFile(
 		file: TFile
-	): Promise<SourceData | null> {
+	): Promise<SourceData2 | null> {
 		try {
 			const content = await this.app.vault.read(file);
 			const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -275,7 +221,7 @@ export class BibliographyExporter {
 		}
 	}
 
-	async generateBibtex(sources: SourceData[]): Promise<string> {
+	async generateBibtex(sources: SourceData2[]): Promise<string> {
 		if (sources.length === 0) {
 			return "% No sources found";
 		}
@@ -333,14 +279,14 @@ export class BibliographyExporter {
 	 * Deduplicate sources by citekey, keeping the first occurrence
 	 * @returns Object with unique sources, duplicate count, and duplicate details
 	 */
-	private deduplicateSources(sources: SourceData[]): {
-		uniqueSources: SourceData[];
+	private deduplicateSources(sources: SourceData2[]): {
+		uniqueSources: SourceData2[];
 		duplicatesFound: number;
-		duplicateCitekeys: Map<string, SourceData[]>;
+		duplicateCitekeys: Map<string, SourceData2[]>;
 	} {
 		console.log("DEBUG: Starting deduplication process...");
-		const sourcesMap = new Map<string, SourceData>();
-		const duplicateCitekeys = new Map<string, SourceData[]>();
+		const sourcesMap = new Map<string, SourceData2>();
+		const duplicateCitekeys = new Map<string, SourceData2[]>();
 		let duplicatesFound = 0;
 
 		for (const source of sources) {
@@ -388,7 +334,7 @@ export class BibliographyExporter {
 		};
 	}
 
-	private sourceToCsl(source: SourceData): any {
+	private sourceToCsl(source: SourceData2): any {
 		const csl: any = {
 			id: source.citekey,
 			title: source.title,
@@ -445,373 +391,5 @@ export class BibliographyExporter {
 		if (!(await this.app.vault.adapter.exists(dirPath))) {
 			await this.app.vault.adapter.mkdir(dirPath);
 		}
-	}
-}
-
-export class CitekeyGenerator {
-	static generateCitekey(
-		authors: string[],
-		year: number,
-		title?: string
-	): string {
-		if (authors.length === 0) {
-			// If no authors, use first 5 letters from title
-			if (title && title.trim().length > 0) {
-				const cleanTitle = title
-					.replace(/<[^>]*>/g, "") // Remove HTML
-					.replace(/&[^;]+;/g, "") // Remove HTML entities
-					.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX
-					.replace(/[{}$]/g, "") // Remove math symbols
-					.replace(/[,:;]/g, " ") // Replace punctuation
-					.replace(/[—–]/g, "-") // Replace dashes
-					.replace(/[<>:"/\\|?*]/g, "") // Remove invalid chars
-					.trim();
-				const titleBase = cleanTitle.substring(0, 5).toLowerCase();
-				return (
-					titleBase.charAt(0).toUpperCase() +
-					titleBase.substring(1) +
-					year.toString().slice(-2)
-				);
-			} else {
-				return "Unknown" + year.toString().slice(-2);
-			}
-		}
-
-		const yearSuffix = year.toString().slice(-2);
-
-		if (authors.length === 1) {
-			// One author: first 3 letters of lastname + year
-			const lastName = this.extractLastName(authors[0]);
-			const base = lastName.substring(0, 3);
-			return (
-				base.charAt(0).toUpperCase() +
-				base.substring(1).toLowerCase() +
-				yearSuffix
-			);
-		} else {
-			// Multiple authors: first 2 letters of first 2 authors + year (capitalized)
-			const firstAuthor = this.extractLastName(authors[0]);
-			const secondAuthor = this.extractLastName(authors[1]);
-			const firstInitial = firstAuthor.substring(0, 2);
-			const secondInitial = secondAuthor.substring(0, 2);
-			const capitalizedBase =
-				firstInitial.charAt(0).toUpperCase() +
-				firstInitial.substring(1).toLowerCase() +
-				secondInitial.charAt(0).toUpperCase() +
-				secondInitial.substring(1).toLowerCase();
-			return capitalizedBase + yearSuffix;
-		}
-	}
-
-	private static extractLastName(authorName: string): string {
-		// Handle formats: "John Smith", "Smith, John", "J. Smith"
-		const parts = authorName.split(",").map((p) => p.trim());
-		if (parts.length === 2) {
-			return parts[0]; // "Smith, John" -> "Smith"
-		} else {
-			const words = parts[0].split(" ");
-			return words[words.length - 1]; // "John Smith" -> "Smith"
-		}
-	}
-
-	static generateFromTitleAndAuthors(
-		title: string,
-		authors: string[],
-		year: number
-	): string {
-		const citekey = this.generateCitekey(authors, year, title);
-		return citekey;
-	}
-
-	static sanitizeFilename(title: string): string {
-		// Create a clean filename from title
-		return (
-			title
-				// Remove HTML/XML tags and entities
-				.replace(/<[^>]*>/g, "")
-				.replace(/&[^;]+;/g, "")
-				// Remove common LaTeX formatting
-				.replace(/\\[a-zA-Z]+\{([^}]+)\}/g, "$1") // Remove LaTeX commands like \textit{}
-				.replace(/[{}$]/g, "") // Remove remaining LaTeX braces and math symbols
-				// Replace common punctuation with spaces (preserve spaces)
-				.replace(/[,:;]/g, " ")
-				.replace(/[—–]/g, "-") // Replace different types of dashes
-				// Remove invalid filename characters
-				.replace(/[<>:"/\\|?*]/g, "")
-				// Remove leading/trailing hyphens but keep spaces
-				.replace(/^-+|-+$/g, "")
-				.trim()
-		);
-	}
-
-	/**
-	 * Extract authors from citation-js data format and return as string array
-	 */
-	static extractAuthorsFromCitationData(citationData: any): string[] {
-		const authors = citationData.author || [];
-		return authors.map((author: any) => {
-			if (author.literal) return author.literal;
-			if (author.family && author.given) {
-				return `${author.family}, ${author.given}`;
-			}
-			if (author.family) return author.family;
-			return "Unknown Author";
-		});
-	}
-
-	/**
-	 * Extract title from URL as fallback for website sources
-	 */
-	static extractTitleFromURL(url: string): string {
-		try {
-			const urlObj = new URL(url);
-			const pathParts = urlObj.pathname
-				.split("/")
-				.filter((part) => part.length > 0);
-			const lastPart = pathParts[pathParts.length - 1];
-
-			if (lastPart) {
-				// Convert dashes and underscores to spaces and capitalize
-				return lastPart
-					.replace(/[-_]/g, " ")
-					.replace(/\b\w/g, (l) => l.toUpperCase());
-			} else {
-				return urlObj.hostname;
-			}
-		} catch {
-			return "Website Source";
-		}
-	}
-}
-
-export class SourceImporter {
-	constructor(
-		private app: App,
-		private sourcesFolder: string,
-		private template?: string
-	) {}
-
-	async createSourceFile(sourceData: any, mediaType: string): Promise<TFile> {
-		const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
-			sourceData.title,
-			sourceData.author || [],
-			sourceData.year
-		);
-
-		// Create readable filename from title
-		const filename =
-			CitekeyGenerator.sanitizeFilename(sourceData.title) + ".md";
-		const sourceFolder = this.app.vault.getAbstractFileByPath(
-			this.sourcesFolder
-		);
-		const targetFolder =
-			sourceFolder instanceof TFolder
-				? `${sourceFolder.path}/${mediaType}`
-				: `${this.sourcesFolder}/${mediaType}`;
-
-		const filePath = `${targetFolder}/${filename}`;
-
-		// Ensure directory exists
-		await this.ensureDirectoryExists(targetFolder);
-
-		// Use template if available, otherwise fall back to default markdown generation
-		const content =
-			this.template && this.template.trim()
-				? this.generateSourceFromTemplate({ ...sourceData, citekey })
-				: this.generateSourceMarkdown({ ...sourceData, citekey });
-
-		// Create file in vault
-		const newFile = await this.app.vault.create(filePath, content);
-
-		return newFile;
-	}
-
-	private async ensureDirectoryExists(dirPath: string): Promise<void> {
-		if (!(await this.app.vault.adapter.exists(dirPath))) {
-			await this.app.vault.adapter.mkdir(dirPath);
-		}
-	}
-
-	private generateSourceMarkdown(source: any): string {
-		const yaml: any = {
-			title: source.title,
-			author: source.author || [],
-			year: source.year,
-			citekey: source.citekey,
-			type: source.type || "misc",
-			tags: ["source"],
-		};
-
-		// Add optional fields only if they exist
-		if (source.doi) yaml.doi = source.doi;
-		if (source.journal) yaml.journal = source.journal;
-		if (source.publisher) yaml.publisher = source.publisher;
-		if (source.pages) yaml.pages = source.pages;
-		if (source.volume) yaml.volume = source.volume;
-		if (source.issue) yaml.issue = source.issue;
-		if (source.isbn) yaml.isbn = source.isbn;
-		if (source.url) yaml.url = source.url;
-		if (source.abstract) yaml.abstract = source.abstract;
-		if (source.keywords) yaml.keywords = source.keywords;
-
-		const yamlString = stringifyYaml(yaml);
-
-		return `---
-${yamlString}
----
-
-# ${source.title}
-
-**Authors:** ${(source.author || []).join(", ")}
-**Year:** ${source.year}
-${source.journal ? `**Journal:** ${source.journal}` : ""}
-${source.publisher ? `**Publisher:** ${source.publisher}` : ""}
-${source.doi ? `**DOI:** ${source.doi}` : ""}
-
-## Abstract
-${source.abstract || "<!-- Add abstract here -->"}
-
-## Key Points
-<!-- Add key findings here -->
-
-## Notes
-<!-- Your notes and analysis -->
-`;
-	}
-
-	private generateSourceFromTemplate(source: any): string {
-		// Create template data object with direct field access
-		const templateData: Record<string, any> = {};
-
-		// Direct field mapping - template variables match source data fields
-		Object.keys(source).forEach((field) => {
-			const value = source[field];
-
-			if (value !== undefined && value !== null) {
-				// Handle special formatting for certain fields
-				if (field === "atcitekey") {
-					// Special handling for atcitekey - prepend @ symbol
-					templateData[field] = `@${value}`;
-				} else if (Array.isArray(value)) {
-					// For arrays, provide both array version (for other uses) and pre-formatted YAML array string
-					templateData[field] = value; // Keep as array for other uses
-					// Format array as YAML array string without using it as object key
-					templateData[field + "Array"] = this.formatYamlArray(value); // Pre-formatted YAML array
-				} else if (typeof value === "string") {
-					templateData[field] = value;
-				} else {
-					templateData[field] = String(value);
-				}
-			} else {
-				// Set empty arrays for fields that should be arrays, empty strings for others
-				if (field === "author" || field === "keywords") {
-					templateData[field] = []; // Empty array for YAML
-					templateData[field + "Array"] = "[]"; // Empty YAML array string
-				} else {
-					templateData[field] = "";
-				}
-			}
-		});
-
-		// Add helper fields
-		templateData.authorList = Array.isArray(source.author)
-			? source.author.join(", ")
-			: source.author || "";
-
-		// Add sanitized filename for use in templates
-		templateData.filename = CitekeyGenerator.sanitizeFilename(source.title);
-		// Add atcitekey for aliases (citekey with @ prefix)
-		if (source.citekey) {
-			templateData.atcitekey = `@${source.citekey}`;
-		}
-
-		console.log(
-			"📊 Final template data:",
-			JSON.stringify(templateData, null, 2)
-		);
-
-		// Render the template
-		try {
-			const templateToRender = this.template || "";
-
-			if (!templateToRender.trim()) {
-				return this.generateSourceMarkdown(source);
-			}
-
-			const result = this.renderTemplateWithRegex(
-				templateToRender,
-				templateData
-			);
-			return result;
-		} catch (error) {
-			console.error("ERROR rendering template:", error);
-			// Fall back to default markdown generation
-			console.warn(
-				"Falling back to default markdown generation due to template error"
-			);
-			return this.generateSourceMarkdown(source);
-		}
-	}
-
-	private renderTemplateWithRegex(
-		template: string,
-		data: Record<string, any>
-	): string {
-		try {
-			let result = template;
-
-			// Replace simple {{variable}} placeholders only
-			result = result.replace(/\{\{([^}]+)\}\}/g, (match, fieldPath) => {
-				const trimmedPath = fieldPath.trim();
-				try {
-					// Handle nested paths like "data.field"
-					const value = this.getNestedValue(data, trimmedPath);
-					const resultValue =
-						value !== undefined && value !== null
-							? String(value)
-							: "";
-					return resultValue;
-				} catch (innerError) {
-					console.error(
-						`ERROR processing variable "${trimmedPath}":`,
-						innerError
-					);
-					return "";
-				}
-			});
-
-			return result;
-		} catch (error) {
-			console.error("CRITICAL ERROR in renderTemplateWithRegex:", error);
-			throw error;
-		}
-	}
-
-	private getNestedValue(obj: any, path: string): any {
-		return path.split(".").reduce((current, key) => {
-			return current && current[key] !== undefined
-				? current[key]
-				: undefined;
-		}, obj);
-	}
-
-	private formatYamlArray(array: any[]): string {
-		if (!array || array.length === 0) {
-			return "[]";
-		}
-
-		// Format each element as a YAML string
-		const formattedItems = array.map((item) => {
-			if (typeof item === "string") {
-				return `"${item.replace(/"/g, '\\"')}"`;
-			} else if (typeof item === "number" || typeof item === "boolean") {
-				return String(item);
-			} else {
-				// For objects or complex types, convert to string
-				return `"${String(item).replace(/"/g, '\\"')}"`;
-			}
-		});
-
-		return `[${formattedItems.join(", ")}]`;
 	}
 }

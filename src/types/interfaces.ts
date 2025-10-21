@@ -57,7 +57,7 @@ export interface BibliographyConfig {
 
 // Extension→format mapping for API format detection
 export const BIBLIOGRAPHY_FORMAT_MAPPING: Record<string, string> = {
-		".bib": "bibtex",
+	".bib": "bibtex",
 	".bibtex": "bibtex",
 	".json": "csl-json",
 	".yaml": "hayagriva",
@@ -82,4 +82,29 @@ export interface BibliographySettings {
 	sourceNoteTemplate: string;
 	templateFile: string;
 	fieldMappings: Record<string, string>;
+}
+
+export interface SourceData2 {
+	citekey: string;
+	title: string;
+	author: string[];
+	year: number;
+	type: "book" | "article" | "inproceedings" | "website" | "misc";
+	journal?: string;
+	publisher?: string;
+	pages?: string;
+	volume?: string;
+	issue?: string;
+	doi?: string;
+	isbn?: string;
+	url?: string;
+	abstract?: string;
+	keywords?: string[];
+	note?: string;
+	filepath: string; // Path to the source file
+}
+
+export interface BibliographyConfig {
+	mode: "directory" | "file";
+	path: string;
 }

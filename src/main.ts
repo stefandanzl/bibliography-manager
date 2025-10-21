@@ -1,70 +1,22 @@
 import { App, Plugin, Notice } from "obsidian";
-import { BibliographyExporter, CitekeyGenerator } from "./exportbib";
+import { BibliographyExporter } from "./exportbib";
 require("@citation-js/plugin-hayagriva");
 import { SourceService } from "./sourceService";
-import { setCrossrefUserAgent } from "./sourceManager";
-import { BIBLIOGRAPHY_FORMAT_MAPPING, SourceData } from "./types";
+import { setCrossrefUserAgent } from "./utils/crossref";
+import { BIBLIOGRAPHY_FORMAT_MAPPING, SourceData } from "./types/interfaces";
 import { getBibliographyCommands } from "./bibliographyCommands";
-import { BibliographySettingTab } from "./settings";
+// import { BibliographySettingTab } from "./settings";
 
 // Import settings and defaults from settings and types files
-import { DEFAULT_SETTINGS } from "./settings";
-import { BibliographySettings, FORMAT_EXTENSION_MAPPING } from "./types";
-
-// API interface that other plugins can use
-export interface BibliographyAPI {
-	/** API for managing bibliography exports */
-	description: string;
-	/**
-	 * Export bibliography content from sources
-	 * @param sourcesFolder - Source files folder (defaults to plugin settings)
-	 * @param outputFilename - Output filename (optional, used for format auto-detection)
-	 * @param format - Export format: "bibtex", "csl-json", "hayagriva" (optional, auto-detects if nullish + outputFilename provided)
-	 * @returns Promise<string> Generated bibliography content
-	 *
-	 * @example
-	 * // Export using plugin defaults
-	 * const bib = await api.exportBibliography();
-	 *
-	 * @example
-	 * // Auto-detect format from filename (format is nullish)
-	 * const bib = await api.exportBibliography(undefined, "my-bib.json", null);
-	 *
-	 * @example
-	 * // Specific format with custom filename
-	 * const bib = await api.exportBibliography('sources', 'references.bib', 'bibtex');
-	 */
-	exportBibliography(
-		sourcesFolder?: string,
-		outputFilename?: string,
-		format?: "bibtex" | "csl-json" | "hayagriva" | ""
-	): Promise<string>;
-
-	/**
-	 * Export bibliography to a file in the vault
-	 * @param sourcesFolder Path to folder containing source files (optional, uses plugin setting)
-	 * @param outputFilename Output filename (optional, auto-generated if not provided)
-	 * @param format Output format ('bibtex', 'csl-json', 'hayagriva') (optional, uses plugin setting)
-	 * @returns Promise<string> Path to the created file
-	 *
-	 * @example
-	 * // Export using plugin defaults
-	 * const filePath = await api.exportBibliographyToPath();
-	 *
-	 * @example
-	 * // Export to specific folder with custom filename
-	 * const filePath = await api.exportBibliographyToPath('sources', 'references.bib', 'bibtex');
-	 *
-	 * @example
-	 * // Auto-detect format from filename (format is nullish)
-	 * const filePath = await api.exportBibliographyToPath(undefined, "my-bib.json", null);
-	 */
-	exportBibliographyToPath(
-		sourcesFolder?: string,
-		outputFilename?: string,
-		format?: "bibtex" | "csl-json" | "hayagriva" | ""
-	): Promise<string>;
-}
+import { DEFAULT_SETTINGS } from "./types/settings";
+import {
+	BibliographySettings,
+	FORMAT_EXTENSION_MAPPING,
+} from "./types/interfaces";
+import { BibliographySettingTab } from "./ui/settingsTab";
+import { BibliographyAPI, createAPI, exposeAPI } from "./utils/api";
+import { initializeSourcesFolder } from "./utils/sources";
+import { registerCommands } from "./setup";
 
 export default class BibliographyManagerPlugin extends Plugin {
 	settings: BibliographySettings;
@@ -88,19 +40,19 @@ export default class BibliographyManagerPlugin extends Plugin {
 			);
 
 			// Set up API for other plugins
-			this.api = this.createAPI();
+			this.api = createAPI(this);
 
 			// Expose API for other plugins - use safer approach
-			this.exposeAPI();
+			// exposeAPI(this);
 
 			// Register commands
-			this.registerCommands();
+			registerCommands(this);
 
 			// Add settings tab
 			this.addSettingTab(new BibliographySettingTab(this.app, this));
 
 			// Initialize sources folder if it doesn't exist
-			await this.initializeSourcesFolder();
+			await initializeSourcesFolder(this);
 		} catch (error) {
 			console.error("Error loading Bibliography Manager plugin:", error);
 			new Notice(
@@ -141,272 +93,5 @@ export default class BibliographyManagerPlugin extends Plugin {
 			this.app,
 			this.settings
 		);
-	}
-
-	public async loadTemplateFile(): Promise<void> {
-		try {
-			// Always reset to default template first
-			this.settings.sourceNoteTemplate =
-				DEFAULT_SETTINGS.sourceNoteTemplate;
-
-			// Load from external file if specified
-			if (
-				this.settings.templateFile &&
-				this.settings.templateFile.trim() !== ""
-			) {
-				const templateExists = await this.app.vault.adapter.exists(
-					this.settings.templateFile
-				);
-
-				if (templateExists) {
-					const templateContent = await this.app.vault.adapter.read(
-						this.settings.templateFile
-					);
-					this.settings.sourceNoteTemplate = templateContent;
-					console.log(
-						`Loaded template from file: ${this.settings.templateFile}`
-					);
-				} else {
-					console.warn(
-						`Template file not found: ${this.settings.templateFile}`
-					);
-					new Notice(
-						`Template file not found: ${this.settings.templateFile}\nUsing default template.`
-					);
-				}
-			}
-		} catch (error) {
-			console.error("Error loading template file:", error);
-			// Fall back to default template
-			this.settings.sourceNoteTemplate =
-				DEFAULT_SETTINGS.sourceNoteTemplate;
-		}
-	}
-
-	private createAPI(): BibliographyAPI {
-		return {
-			description: "Bibliography Manager API - Export citations from source files to various formats (BibTeX, CSL-JSON, Hayagriva). Use exportBibliography() for content string or exportBibliographyToPath() to write directly to vault file.",
-			/**
-			 * Generate bibliography content from sources
-			 * @param sourcesFolder Path to folder containing source files (optional, uses plugin setting)
-			 * @param format Output format ('bibtex', 'csl', 'yaml', etc.) (optional, uses plugin setting)
-			 * @returns Promise<string> Generated bibliography content
-			 *
-			 * @example
-			 * // Export using plugin defaults
-			 * const bib = await api.exportBibliography();
-			 *
-			 * @example
-			 * // Auto-detect format from filename (format is nullish)
-			 * const bib = await api.exportBibliography(undefined, null, "my-bib.json");
-			 *
-			 * @example
-			 * // Specific format with custom filename
-			 * const bib = await api.exportBibliography('sources', 'bibtex', 'references.bib');
-			 */
-			exportBibliography: async (
-				sourcesFolder?: string,
-				outputFilename?: string,
-				format?: "bibtex" | "csl-json" | "hayagriva" | ""
-			) => {
-				try {
-					const folder = sourcesFolder || this.settings.sourcesFolder;
-
-					// Smart format detection (only when format is nullish AND outputFilename provided)
-					let bibFormat = format || this.settings.bibliographyFormat;
-					if (!format && outputFilename) {
-						const ext = outputFilename
-							.toLowerCase()
-							.substring(outputFilename.lastIndexOf("."));
-						const detectedFormat = BIBLIOGRAPHY_FORMAT_MAPPING[ext];
-
-						if (!detectedFormat) {
-							throw new Error(
-								`Unsupported file extension: ${ext}. Supported extensions: .bib, .json, .yaml, .yml`
-							);
-						}
-
-						bibFormat = detectedFormat as
-							| "bibtex"
-							| "csl-json"
-							| "hayagriva";
-					}
-
-					// Use existing sourceService method
-					const bibContent =
-						await this.sourceService.generateBibliography(
-							folder,
-							bibFormat
-						);
-
-					if (!bibContent || bibContent.trim() === "") {
-						throw new Error(
-							"No sources found or failed to generate bibliography"
-						);
-					}
-
-					return bibContent;
-				} catch (error) {
-					console.error("API: Failed to export bibliography:", error);
-					throw error;
-				}
-			},
-			/**
-			 * Export bibliography to a file in the vault
-			 * @param sourcesFolder Path to folder containing source files (optional, uses plugin setting)
-			 * @param format Output format ('bibtex', 'csl-json', 'hayagriva') (optional, uses plugin setting)
-			 * @param outputFilename Output filename (optional, auto-generated if not provided)
-			 * @returns Promise<string> Path to the created file
-			 *
-			 * @example
-			 * // Export using plugin defaults
-			 * const filePath = await api.exportBibliographyToPath();
-			 *
-			 * @example
-			 * // Export to specific folder with custom filename
-			 * const filePath = await api.exportBibliographyToPath('sources', 'bibtex', 'references.bib');
-			 *
-			 * @example
-			 * // Auto-detect format from filename (format is nullish)
-			 * const filePath = await api.exportBibliographyToPath(undefined, null, "my-bib.json");
-			 */
-			exportBibliographyToPath: async (
-				sourcesFolder?: string,
-				outputFilename?: string,
-				format?: "bibtex" | "csl-json" | "hayagriva" | ""
-			) => {
-				try {
-					// Generate bibliography content using existing function
-					const content = await this.api.exportBibliography(
-						sourcesFolder,
-						outputFilename,
-						format
-					);
-
-					if (!content) {
-						throw new Error("No bibliography content generated");
-					}
-
-					// Generate output path
-					const folder = sourcesFolder || this.settings.sourcesFolder;
-					const bibFormat =
-						format || this.settings.bibliographyFormat;
-					const filename =
-						outputFilename ||
-						`bibliography${
-							FORMAT_EXTENSION_MAPPING[bibFormat] || ".bib"
-						}`;
-
-					// Ensure folder exists
-					if (!this.app.vault.getAbstractFileByPath(folder)) {
-						await this.app.vault.createFolder(folder);
-					}
-
-					const filePath = `${folder}/${filename}`;
-
-					// Write content to file
-					await this.app.vault.adapter.write(filePath, content);
-
-					console.log(`API: Bibliography exported to ${filePath}`);
-					return filePath;
-				} catch (error) {
-					console.error(
-						"API: Failed to export bibliography to path:",
-						error
-					);
-					throw error;
-				}
-			},
-		};
-	}
-
-	private registerCommands() {
-		const commands = getBibliographyCommands(this.app, this.settings, this);
-
-		commands.forEach((command) => {
-			this.addCommand(command);
-		});
-
-		// Additional plugin-specific commands
-		this.addCommand({
-			id: "show-sources-folder",
-			name: "Show sources folder",
-			callback: () => {
-				const folder = this.app.vault.getAbstractFileByPath(
-					this.settings.sourcesFolder
-				);
-				if (folder) {
-					this.app.workspace.getLeaf(true).openFile(folder as any);
-				} else {
-					new Notice(
-						`Sources folder '${this.settings.sourcesFolder}' not found`
-					);
-				}
-			},
-		});
-
-		this.addCommand({
-			id: "generate-bibliography-file",
-			name: "Generate bibliography file",
-			callback: async () => {
-				try {
-					// Generate full filename with extension based on format
-					const extension =
-						FORMAT_EXTENSION_MAPPING[
-							this.settings.bibliographyFormat
-						] || ".bib";
-					const outputFolder =
-						this.settings.bibliographyOutputFolder ||
-						this.settings.sourcesFolder;
-					const bibPath = `${outputFolder}/${this.settings.bibliographyFilename}${extension}`;
-
-					// Generate bibliography using API
-					const bibContent = await this.api.exportBibliography();
-
-					// Write to file
-					await this.app.vault.adapter.write(bibPath, bibContent);
-					new Notice(`Bibliography exported to ${bibPath}`);
-				} catch (error) {
-					new Notice(
-						`Failed to generate bibliography: ${error.message}`
-					);
-				}
-			},
-		});
-	}
-
-	private exposeAPI() {
-		try {
-			// Expose API for other plugins - use safer approach
-			if (!(this.app as any).plugins.plugins) {
-				(this.app as any).plugins.plugins = {};
-			}
-			(this.app as any).plugins.plugins["bibliography-manager"] = {
-				api: this.api,
-				version: "1.0.0",
-			};
-		} catch (error) {
-			console.warn("Could not expose plugin API:", error);
-		}
-	}
-
-	private async initializeSourcesFolder() {
-		try {
-			// Check if folder exists using adapter to avoid triggering file events
-			const folderExists = await this.app.vault.adapter.exists(
-				this.settings.sourcesFolder
-			);
-
-			if (!folderExists) {
-				// Create folder using adapter directly to avoid triggering unnecessary events
-				await this.app.vault.adapter.mkdir(this.settings.sourcesFolder);
-				console.log(
-					`Created sources folder: ${this.settings.sourcesFolder}`
-				);
-			}
-		} catch (error) {
-			console.warn("Could not initialize sources folder:", error);
-			// Don't throw error - plugin can work without the sources folder
-		}
 	}
 }

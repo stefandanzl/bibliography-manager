@@ -7,9 +7,13 @@ import {
 	parseYaml,
 	stringifyYaml,
 } from "obsidian";
-import { SourceData, SourceType, BibliographySettings } from "./types";
-import { BIB_FIELDS, DEFAULT_SETTINGS } from "./settings";
-import { CitekeyGenerator } from "./exportbib";
+import {
+	SourceData,
+	SourceType,
+	BibliographySettings,
+} from "./types/interfaces";
+import { BIB_FIELDS, DEFAULT_SETTINGS } from "./types/settings";
+// import { CitekeyGenerator } from "./exportbib";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite, plugins } from "@citation-js/core";
