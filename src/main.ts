@@ -3,8 +3,6 @@ import { BibliographyExporter } from "./exportbib";
 require("@citation-js/plugin-hayagriva");
 import { SourceService } from "./sourceService";
 import { setCrossrefUserAgent } from "./utils/crossref";
-import { BIBLIOGRAPHY_FORMAT_MAPPING, SourceData } from "./types/interfaces";
-import { getBibliographyCommands } from "./bibliographyCommands";
 // import { BibliographySettingTab } from "./settings";
 
 // Import settings and defaults from settings and types files

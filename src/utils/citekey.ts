@@ -1,3 +1,12 @@
+import {
+	App,
+	Editor,
+	MarkdownView,
+	Notice,
+	parseYaml,
+	stringifyYaml,
+} from "obsidian";
+
 export class CitekeyGenerator {
 	static generateCitekey(
 		authors: string[],
@@ -130,6 +139,75 @@ export class CitekeyGenerator {
 			}
 		} catch {
 			return "Website Source";
+		}
+	}
+}
+
+export class GenerateCitekeyCommand {
+	constructor(private app: App) {}
+
+	async execute(editor: Editor, view: MarkdownView) {
+		const file = view.file;
+		if (!file) {
+			new Notice("No file is currently active");
+			return;
+		}
+
+		try {
+			const content = await this.app.vault.read(file);
+			const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+
+			if (!frontmatterMatch) {
+				new Notice("No frontmatter found in this file");
+				return;
+			}
+
+			const yaml = parseYaml(frontmatterMatch[1]);
+			const title = yaml.title || file.basename;
+			const authors = yaml.author || [];
+			const year = yaml.year || new Date().getFullYear();
+
+			if (authors.length === 0) {
+				new Notice(
+					"No authors found in frontmatter. Please add author field first."
+				);
+				return;
+			}
+
+			const citekey = CitekeyGenerator.generateFromTitleAndAuthors(
+				title,
+				authors,
+				year
+			);
+
+			// Update frontmatter with citekey
+			yaml.citekey = citekey;
+
+			// Add @citekey to aliases if not already present
+			if (!yaml.aliases) {
+				yaml.aliases = [`@${citekey}`];
+			} else if (Array.isArray(yaml.aliases)) {
+				if (!yaml.aliases.includes(`@${citekey}`)) {
+					yaml.aliases.push(`@${citekey}`);
+				}
+			} else {
+				// Convert string alias to array and add @citekey
+				const existingAliases =
+					typeof yaml.aliases === "string" ? [yaml.aliases] : [];
+				yaml.aliases = [...existingAliases, `@${citekey}`];
+			}
+
+			const newYaml = stringifyYaml(yaml);
+			const newContent = content.replace(
+				/^---\n[\s\S]*?\n---/,
+				`---\n${newYaml}---`
+			);
+
+			await this.app.vault.modify(file, newContent);
+			new Notice(`Generated citekey: ${citekey}`);
+		} catch (error) {
+			console.error("Error generating citekey:", error);
+			new Notice("Error generating citekey. Check console for details.");
 		}
 	}
 }

@@ -1,3 +1,6 @@
+export {};
+
+/**
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite, util } from "@citation-js/core";
 import "@citation-js/plugin-doi";
@@ -340,3 +343,6 @@ export class SourceImportModal extends Modal {
 		return "other";
 	}
 }
+
+
+**/

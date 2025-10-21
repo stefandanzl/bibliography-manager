@@ -1,7 +1,12 @@
-import { Notice } from "obsidian";
-import { getBibliographyCommands } from "./bibliographyCommands";
-import { FORMAT_EXTENSION_MAPPING } from "./types/interfaces";
+import { App, Editor, MarkdownView, Notice } from "obsidian";
+import { SourceImportModal } from "./ui/sourceImportModal";
+import {
+	BibliographySettings,
+	FORMAT_EXTENSION_MAPPING,
+} from "./types/interfaces";
 import BibliographyManagerPlugin from "./main";
+import { BibliographyExportModal } from "./ui/exportModal";
+import { GenerateCitekeyCommand } from "./utils/citekey";
 
 export function registerCommands(plugin: BibliographyManagerPlugin) {
 	const commands = getBibliographyCommands(
@@ -95,4 +100,36 @@ export async function initializeCiteJS() {
 	CiteConstructor.add(pluginConfig);
 
 	return CiteConstructor;
+}
+
+// Command definitions - pass app instance and settings
+export function getBibliographyCommands(
+	app: App,
+	settings: BibliographySettings,
+	plugin?: BibliographyManagerPlugin
+) {
+	return [
+		{
+			id: "generate-citekey",
+			name: "Generate citekey for current source",
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				const command = new GenerateCitekeyCommand(app);
+				command.execute(editor, view);
+			},
+		},
+		{
+			id: "export-bibliography-manual",
+			name: "Export bibliography manually",
+			callback: () => {
+				new BibliographyExportModal(app, settings).open();
+			},
+		},
+		{
+			id: "import-source",
+			name: "Import new source",
+			callback: () => {
+				new SourceImportModal(app, settings, plugin).open();
+			},
+		},
+	];
 }
