@@ -1,9 +1,7 @@
 import { Modal, App, Setting, Notice } from "obsidian";
 import { SourceService } from "src/sourceService";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "src/types/interfaces";
+import { FORMAT_EXTENSION_MAPPING } from "src/types/interfaces";
+import { BibliographySettings } from "src/types/settings";
 
 export class BibliographyExportModal extends Modal {
 	private bibContent: string = "";

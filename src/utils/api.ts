@@ -195,18 +195,3 @@ export function createAPI(plugin: BibliographyManagerPlugin): BibliographyAPI {
 		},
 	};
 }
-
-export function exposeAPI(plugin: BibliographyManagerPlugin) {
-	try {
-		// Expose API for other plugins - use safer approach
-		if (!(plugin.app as any).plugins.plugins) {
-			(plugin.app as any).plugins.plugins = {};
-		}
-		(plugin.app as any).plugins.plugins["bibliography-manager"] = {
-			api: plugin.api,
-			version: "1.0.0",
-		};
-	} catch (error) {
-		console.warn("Could not expose plugin API:", error);
-	}
-}

@@ -1,4 +1,15 @@
-import { BibliographySettings, FORMAT_EXTENSION_MAPPING } from "./interfaces";
+export interface BibliographySettings {
+	sourcesFolder: string;
+	bibliographyFilename: string;
+	bibliographyOutputFolder: string;
+	bibliographyFormat: "bibtex" | "csl-json" | "hayagriva";
+	autoGenerate: boolean;
+	supportedFileTypes: string[];
+	crossrefEmail: string;
+	sourceNoteTemplate: string;
+	templateFile: string;
+	fieldMappings: Record<string, string>;
+}
 
 // Default settings
 export const DEFAULT_SETTINGS: BibliographySettings = {

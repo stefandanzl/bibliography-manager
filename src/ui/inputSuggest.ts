@@ -1,16 +1,4 @@
-import BibliographyManagerPlugin from "../main";
-import {
-	App,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	AbstractInputSuggest,
-	Notice,
-} from "obsidian";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "../types/interfaces";
+import { App, AbstractInputSuggest } from "obsidian";
 
 // Folder suggestion class for autocompleting folder paths
 export class FolderSuggest extends AbstractInputSuggest<string> {

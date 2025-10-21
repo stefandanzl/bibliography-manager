@@ -1,12 +1,10 @@
 import { App, Editor, MarkdownView, Notice } from "obsidian";
 import { SourceImportModal } from "./ui/sourceImportModal";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "./types/interfaces";
+import { FORMAT_EXTENSION_MAPPING } from "./types/interfaces";
 import BibliographyManagerPlugin from "./main";
 import { BibliographyExportModal } from "./ui/exportModal";
 import { GenerateCitekeyCommand } from "./utils/citekey";
+import { BibliographySettings } from "./types/settings";
 
 export function registerCommands(plugin: BibliographyManagerPlugin) {
 	const commands = getBibliographyCommands(

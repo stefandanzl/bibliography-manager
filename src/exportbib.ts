@@ -1,20 +1,9 @@
-import {
-	App,
-	TFile,
-	TFolder,
-	Notice,
-	parseYaml,
-	stringifyYaml,
-} from "obsidian";
+import { App, TFile, TFolder, Notice, parseYaml } from "obsidian";
 // No Handlebars import - we'll use simple regex replacement
-import type {
-	BibliographyConfig,
-	BibliographySettings,
-	SourceData2,
-} from "./types/interfaces";
+import type { BibliographyConfig, SourceData2 } from "./types/interfaces";
 import { FORMAT_EXTENSION_MAPPING } from "./types/interfaces";
-import { CitekeyGenerator } from "./utils/citekey";
 import { initializeCiteJS } from "./setup";
+import { BibliographySettings } from "./types/settings";
 
 export class BibliographyExporter {
 	constructor(private app: App, private settings: BibliographySettings) {}

@@ -41,14 +41,15 @@ export interface SourceData {
 	issue?: string;
 }
 
-export type SourceType =
-	| "book"
-	| "paper"
-	| "website"
-	| "thesis"
-	| "report"
-	| "other";
-export type ImportMethod = "doi" | "isbn" | "url" | "bibtex";
+// export type SourceType =
+// 	| "book"
+// 	| "paper"
+// 	| "website"
+// 	| "thesis"
+// 	| "report"
+// 	| "other";
+
+// export type ImportMethod = "doi" | "isbn" | "url" | "bibtex";
 
 export interface BibliographyConfig {
 	mode: "directory" | "file";
@@ -70,19 +71,6 @@ export const FORMAT_EXTENSION_MAPPING: Record<string, string> = {
 	"csl-json": ".json",
 	hayagriva: ".yaml",
 };
-
-export interface BibliographySettings {
-	sourcesFolder: string;
-	bibliographyFilename: string;
-	bibliographyOutputFolder: string;
-	bibliographyFormat: "bibtex" | "csl-json" | "hayagriva";
-	autoGenerate: boolean;
-	supportedFileTypes: string[];
-	crossrefEmail: string;
-	sourceNoteTemplate: string;
-	templateFile: string;
-	fieldMappings: Record<string, string>;
-}
 
 export interface SourceData2 {
 	citekey: string;

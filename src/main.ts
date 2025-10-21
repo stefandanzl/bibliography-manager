@@ -1,4 +1,4 @@
-import { App, Plugin, Notice } from "obsidian";
+import { Plugin, Notice } from "obsidian";
 import { BibliographyExporter } from "./exportbib";
 require("@citation-js/plugin-hayagriva");
 import { SourceService } from "./sourceService";
@@ -6,13 +6,9 @@ import { setCrossrefUserAgent } from "./utils/crossref";
 // import { BibliographySettingTab } from "./settings";
 
 // Import settings and defaults from settings and types files
-import { DEFAULT_SETTINGS } from "./types/settings";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "./types/interfaces";
+import { BibliographySettings, DEFAULT_SETTINGS } from "./types/settings";
 import { BibliographySettingTab } from "./ui/settingsTab";
-import { BibliographyAPI, createAPI, exposeAPI } from "./utils/api";
+import { BibliographyAPI, createAPI } from "./utils/api";
 import { initializeSourcesFolder } from "./utils/sources";
 import { registerCommands } from "./setup";
 

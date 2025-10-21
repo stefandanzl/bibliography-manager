@@ -1,16 +1,6 @@
 import BibliographyManagerPlugin from "../main";
-import {
-	App,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	AbstractInputSuggest,
-	Notice,
-} from "obsidian";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "../types/interfaces";
+import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import { FORMAT_EXTENSION_MAPPING } from "../types/interfaces";
 import { DEFAULT_SETTINGS } from "src/types/settings";
 import { FolderSuggest, TemplateFileSuggest } from "./inputSuggest";
 import { loadTemplateFile } from "src/utils/template";

@@ -1,20 +1,6 @@
-import {
-	App,
-	Editor,
-	MarkdownView,
-	Notice,
-	Modal,
-	Setting,
-	parseYaml,
-	stringifyYaml,
-} from "obsidian";
-import {
-	BibliographySettings,
-	FORMAT_EXTENSION_MAPPING,
-} from "../types/interfaces";
+import { App, Notice, Modal, Setting } from "obsidian";
 // import { CitekeyGenerator, SourceImporter } from "./exportbib";
 import BibliographyManagerPlugin from "../main";
-import { SourceService } from "../sourceService";
 
 // @ts-ignore - citation-js doesn't have official TypeScript types
 import { Cite } from "@citation-js/core";
@@ -22,9 +8,9 @@ import "@citation-js/plugin-doi";
 import "@citation-js/plugin-isbn";
 import "@citation-js/plugin-bibtex";
 import { loadTemplateFile } from "../utils/template";
-import { CitekeyGenerator, GenerateCitekeyCommand } from "../utils/citekey";
+import { CitekeyGenerator } from "../utils/citekey";
 import { SourceImporter } from "../utils/soureImporter";
-import { BibliographyExportModal } from "./exportModal";
+import { BibliographySettings } from "src/types/settings";
 // Note: wikidata plugin removed to save 2.5MB bundle size
 
 export class SourceImportModal extends Modal {
