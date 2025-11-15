@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownView, Notice } from "obsidian";
-import { SourceImportModal } from "./ui/sourceImportModal";
+import { SourceImportModal } from "./ui/importModal";
 import { FORMAT_EXTENSION_MAPPING } from "./types/interfaces";
 import BibliographyManagerPlugin from "./main";
 import { BibliographyExportModal } from "./ui/exportModal";
